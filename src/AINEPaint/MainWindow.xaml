@@ -51,11 +51,11 @@
                     BorderBrush="{StaticResource BorderBrush2}"
                     BorderThickness="0,0,1,0">
                 <StackPanel Margin="0,8">
-                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🖊" IsChecked="True" ToolTip="ペン" />
-                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="✏"  ToolTip="鉛筆" />
-                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🧽" ToolTip="消しゴム" />
-                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🖐" ToolTip="移動（スペース+ドラッグ / 中ボタンドラッグ）" />
-                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="💧" ToolTip="スポイト" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}" Content="🖊" IsChecked="True" ToolTip="ペン" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}" Content="✏"  ToolTip="鉛筆" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}" Content="🧽" ToolTip="消しゴム" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}" Content="🖐" ToolTip="移動（スペース+ドラッグ / 中ボタンドラッグ）" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}" Content="💧" ToolTip="スポイト" />
                 </StackPanel>
             </Border>
 

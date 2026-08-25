@@ -42,8 +42,11 @@ public sealed class PaintDocument : IDisposable
         var info = new SKImageInfo(width, height, SKImageInfo.PlatformColorType, SKAlphaType.Premul);
         Bitmap = new SKBitmap(info);
 
+        // 画素そのものは常に透明で始める。
+        // 「白背景」は表示・書き出し時に敷くものとして扱う。
+        // こうしないと消しゴムで白背景を消せてしまい、レイヤー化した時に破綻する。
         using var canvas = new SKCanvas(Bitmap);
-        canvas.Clear(background == CanvasBackground.White ? SKColors.White : SKColors.Transparent);
+        canvas.Clear(SKColors.Transparent);
     }
 
     /// <summary>このドキュメントが占めるおおよそのメモリ量（バイト）。</summary>
