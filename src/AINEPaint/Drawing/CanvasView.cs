@@ -33,6 +33,9 @@ public class CanvasView : SKElement
     /// <summary>スペースキーが押されている間 true。MainWindow から設定する。</summary>
     public bool IsPanModifierDown { get; set; }
 
+    /// <summary>移動ツールが選択されている間 true。左ドラッグがパンになる。</summary>
+    public bool PanToolActive { get; set; }
+
     /// <summary>表示状態（倍率・サイズ）が変わったときに発火。ステータスバー更新用。</summary>
     public event Action? ViewStateChanged;
 
@@ -55,7 +58,7 @@ public class CanvasView : SKElement
         get => _document;
         set
         {
-            CancelStroke();
+            FinishStroke();
             _document = value;
             Cursor = value is null ? Cursors.Arrow : Cursors.Cross;
             FitToWindow();
@@ -117,15 +120,31 @@ public class CanvasView : SKElement
             canvas.DrawRect(screenRect, whitePaint);
         }
 
-        // ドキュメント本体
+        // ドキュメント本体 ＋ 描画中のストローク
         using (var paint = new SKPaint
                {
                    FilterQuality = Viewport.Scale >= 1f ? SKFilterQuality.None : SKFilterQuality.Medium
                })
         {
+            var preview = _stroke.PreviewBuffer;
+            using SKPaint? previewPaint = preview is null ? null : _stroke.CreatePreviewPaint();
+
+            // 消しゴムのプレビューは「下の絵を削る」処理なので、
+            // ドキュメントと同じレイヤー内で合成しないと背景まで削ってしまう
+            bool needsLayer = preview is not null && _stroke.IsErasing;
+
             canvas.Save();
+            if (needsLayer)
+                canvas.SaveLayer(null);
+
             canvas.SetMatrix(matrix);
             canvas.DrawBitmap(_document.Bitmap, 0, 0, paint);
+
+            if (preview is not null && previewPaint is not null)
+                canvas.DrawBitmap(preview, 0, 0, previewPaint);
+
+            if (needsLayer)
+                canvas.Restore();
             canvas.Restore();
         }
 
@@ -172,7 +191,7 @@ public class CanvasView : SKElement
         if (_document is null) return;
 
         bool wantsPan = e.ChangedButton == MouseButton.Middle
-                        || (e.ChangedButton == MouseButton.Left && IsPanModifierDown);
+                        || (e.ChangedButton == MouseButton.Left && (IsPanModifierDown || PanToolActive));
 
         if (wantsPan)
         {
@@ -229,9 +248,8 @@ public class CanvasView : SKElement
 
         if (_isDrawing && e.ChangedButton == MouseButton.Left)
         {
-            var dirty = _stroke.DirtyRect;
-            _stroke.End();
             _isDrawing = false;
+            var dirty = _stroke.End();
             ReleaseMouseCapture();
             InvalidateVisual();
             StrokeCompleted?.Invoke(dirty);
@@ -241,15 +259,17 @@ public class CanvasView : SKElement
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
-        CancelStroke();
+        // 何らかの理由でキャプチャが外れた場合も、描いた分は捨てずに確定させる
+        FinishStroke();
     }
 
-    private void CancelStroke()
+    private void FinishStroke()
     {
         if (!_isDrawing) return;
-        _stroke.End();
         _isDrawing = false;
+        var dirty = _stroke.End();
         InvalidateVisual();
+        StrokeCompleted?.Invoke(dirty);
     }
 
     /// <summary>画面座標をドキュメント座標へ変換し、可能なら筆圧も拾う。</summary>

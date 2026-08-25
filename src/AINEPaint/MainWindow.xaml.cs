@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using AINEPaint.Brushes;
 using AINEPaint.Drawing;
 using AINEPaint.Views;
 
@@ -43,6 +46,73 @@ public partial class MainWindow : Window
     private void OnZoomOutClick(object sender, RoutedEventArgs e) => Canvas.ZoomByStep(1f / 1.25f);
     private void OnFitClick(object sender, RoutedEventArgs e) => Canvas.FitToWindow();
 
+    // ===== ツール =====
+
+    private void OnToolChecked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton { Tag: string tag }) return;
+        ApplyTool(tag);
+    }
+
+    private void ApplyTool(string tag)
+    {
+        // Canvas は InitializeComponent 中の IsChecked 設定でも呼ばれ得るので防御する
+        if (Canvas is null) return;
+
+        Canvas.PanToolActive = tag == "Pan";
+
+        switch (tag)
+        {
+            case "Pen":
+                Canvas.Brush.Kind = BrushKind.Pen;
+                break;
+            case "Pencil":
+                Canvas.Brush.Kind = BrushKind.Pencil;
+                break;
+            case "Eraser":
+                Canvas.Brush.Kind = BrushKind.Eraser;
+                break;
+        }
+    }
+
+    /// <summary>キーボードからツールを切り替える。ボタンの選択状態も合わせる。</summary>
+    private void SelectTool(string tag)
+    {
+        if (ToolPanel is null) return;
+
+        foreach (var child in ToolPanel.Children)
+        {
+            if (child is RadioButton { Tag: string t } button && t == tag && button.IsEnabled)
+            {
+                button.IsChecked = true;   // Checked イベント経由で ApplyTool が走る
+                return;
+            }
+        }
+    }
+
+    // ===== ブラシ設定 =====
+
+    private void OnSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (Canvas is null || SizeValueText is null) return;
+
+        Canvas.Brush.Size = (float)e.NewValue;
+        SizeValueText.Text = ((int)e.NewValue).ToString();
+    }
+
+    private void OnOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (Canvas is null || OpacityValueText is null) return;
+
+        Canvas.Brush.Opacity = (float)(e.NewValue / 100.0);
+        OpacityValueText.Text = $"{(int)e.NewValue}%";
+    }
+
+    private void NudgeBrushSize(double delta)
+    {
+        SizeSlider.Value = Math.Clamp(SizeSlider.Value + delta, SizeSlider.Minimum, SizeSlider.Maximum);
+    }
+
     // ===== 入力 =====
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
@@ -75,12 +145,29 @@ public partial class MainWindow : Window
                     e.Handled = true;
                     return;
             }
+            return;
         }
 
-        if (e.Key == Key.Space)
+        switch (e.Key)
         {
-            Canvas.IsPanModifierDown = true;
-            e.Handled = true; // ボタンにフォーカスがある場合の誤爆を防ぐ
+            case Key.P: SelectTool("Pen"); e.Handled = true; return;
+            case Key.N: SelectTool("Pencil"); e.Handled = true; return;
+            case Key.E: SelectTool("Eraser"); e.Handled = true; return;
+            case Key.H: SelectTool("Pan"); e.Handled = true; return;
+
+            case Key.OemOpenBrackets:
+                NudgeBrushSize(-Math.Max(1, SizeSlider.Value * 0.1));
+                e.Handled = true;
+                return;
+            case Key.OemCloseBrackets:
+                NudgeBrushSize(Math.Max(1, SizeSlider.Value * 0.1));
+                e.Handled = true;
+                return;
+
+            case Key.Space:
+                Canvas.IsPanModifierDown = true;
+                e.Handled = true;   // ボタンにフォーカスがある場合の誤爆を防ぐ
+                return;
         }
     }
 
@@ -95,6 +182,8 @@ public partial class MainWindow : Window
 
     private void UpdateStatus()
     {
+        if (StatusText is null) return;
+
         if (_document is null)
         {
             StatusText.Text = "キャンバスなし";
