@@ -6,16 +6,26 @@ namespace AINEPaint.Brushes;
 /// 1本のストロークをビットマップへ描き込む。
 /// Begin → AddPoint（複数回）→ End の順で使う。
 ///
-/// 現状は対象ビットマップへ直接描く。
+/// 入力点をそのまま直線で結ぶと、速く描いたときに折れ線になる。
+/// そこで「隣り合う点の中点どうしを、元の点を制御点にした2次ベジェで繋ぐ」
+/// 方式で滑らかにしている。追加の遅延やバッファは不要で、
+/// 1点受け取るごとに確定した区間だけを描けるため描画の追従が落ちない。
+///
 /// 不透明度を下げたときに重なりが濃くなる問題は、
 /// STEP 8 で「ストローク用の一時レイヤーに描いてから合成する」方式に
 /// 差し替えて解決する。呼び出し側の使い方は変えずに済む設計にしてある。
 /// </summary>
 public sealed class StrokeRenderer : IDisposable
 {
+    /// <summary>これ未満しか動いていない入力点は捨てる（ドキュメントピクセル）。手ブレ対策。</summary>
+    private const float MinPointDistance = 0.6f;
+
     private SKCanvas? _canvas;
     private SKPaint? _paint;
-    private StrokePoint _last;
+
+    private StrokePoint _previous;
+    private SKPoint _lastMid;
+    private bool _hasSegment;
 
     public bool IsActive => _canvas is not null;
 
@@ -28,47 +38,76 @@ public sealed class StrokeRenderer : IDisposable
 
         _canvas = new SKCanvas(target);
         _paint = CreatePaint(settings);
-        _last = start;
+        _previous = start;
+        _lastMid = new SKPoint(start.X, start.Y);
+        _hasSegment = false;
         DirtyRect = SKRect.Empty;
 
-        // 押した瞬間に点が残るように、同じ座標へ極小の線分を引く
-        DrawSegment(start, start, settings);
+        // 置いた瞬間に点が残るように、丸を1つ打つ
+        float radius = WidthFor(settings, start.Pressure, start.Pressure) * 0.5f;
+        using var dot = _paint.Clone();
+        dot.Style = SKPaintStyle.Fill;
+        _canvas.DrawCircle(start.X, start.Y, radius, dot);
+        Expand(new SKRect(start.X - radius, start.Y - radius, start.X + radius, start.Y + radius), 2f);
     }
 
     public void AddPoint(StrokePoint point, BrushSettings settings)
     {
-        if (_canvas is null) return;
-        DrawSegment(_last, point, settings);
-        _last = point;
+        if (_canvas is null || _paint is null) return;
+
+        float dx = point.X - _previous.X;
+        float dy = point.Y - _previous.Y;
+        if (dx * dx + dy * dy < MinPointDistance * MinPointDistance)
+            return;
+
+        var mid = new SKPoint((_previous.X + point.X) * 0.5f, (_previous.Y + point.Y) * 0.5f);
+
+        float width = WidthFor(settings, _previous.Pressure, point.Pressure);
+        _paint.StrokeWidth = width;
+
+        using var path = new SKPath();
+        path.MoveTo(_lastMid);
+        path.QuadTo(_previous.X, _previous.Y, mid.X, mid.Y);
+        _canvas.DrawPath(path, _paint);
+
+        Expand(path.Bounds, width * 0.5f + 2f);
+
+        _lastMid = mid;
+        _previous = point;
+        _hasSegment = true;
     }
 
     public void End()
     {
+        // 最後の入力点までは中点で止まっているので、残りを繋いで描き切る
+        if (_canvas is not null && _paint is not null && _hasSegment)
+        {
+            _canvas.DrawLine(_lastMid.X, _lastMid.Y, _previous.X, _previous.Y, _paint);
+            Expand(new SKRect(
+                Math.Min(_lastMid.X, _previous.X), Math.Min(_lastMid.Y, _previous.Y),
+                Math.Max(_lastMid.X, _previous.X), Math.Max(_lastMid.Y, _previous.Y)),
+                _paint.StrokeWidth * 0.5f + 2f);
+        }
+
+        _hasSegment = false;
         _paint?.Dispose();
         _paint = null;
         _canvas?.Dispose();
         _canvas = null;
     }
 
-    private void DrawSegment(StrokePoint a, StrokePoint b, BrushSettings settings)
+    /// <summary>筆圧は今のところ線幅にのみ反映する。マウスでは Pressure = 1.0 で一定。</summary>
+    private static float WidthFor(BrushSettings settings, float pressureA, float pressureB)
     {
-        if (_canvas is null || _paint is null) return;
+        float pressure = Math.Clamp((pressureA + pressureB) * 0.5f, 0.05f, 1f);
+        return Math.Max(0.5f, settings.Size * pressure);
+    }
 
-        // 筆圧はまだ線幅にのみ反映する。マウスなら Pressure = 1.0 で一定。
-        float pressure = Math.Clamp((a.Pressure + b.Pressure) * 0.5f, 0.05f, 1f);
-        float width = Math.Max(0.5f, settings.Size * pressure);
-        _paint.StrokeWidth = width;
-
-        _canvas.DrawLine(a.X, a.Y, b.X, b.Y, _paint);
-
-        float pad = width * 0.5f + 2f;
-        var segment = new SKRect(
-            Math.Min(a.X, b.X) - pad,
-            Math.Min(a.Y, b.Y) - pad,
-            Math.Max(a.X, b.X) + pad,
-            Math.Max(a.Y, b.Y) + pad);
-
-        DirtyRect = DirtyRect.IsEmpty ? segment : SKRect.Union(DirtyRect, segment);
+    private void Expand(SKRect rect, float padding)
+    {
+        var padded = new SKRect(rect.Left - padding, rect.Top - padding,
+                                rect.Right + padding, rect.Bottom + padding);
+        DirtyRect = DirtyRect.IsEmpty ? padded : SKRect.Union(DirtyRect, padded);
     }
 
     private static SKPaint CreatePaint(BrushSettings settings)
@@ -80,26 +119,21 @@ public sealed class StrokeRenderer : IDisposable
             Style = SKPaintStyle.Stroke,
             StrokeCap = SKStrokeCap.Round,
             StrokeJoin = SKStrokeJoin.Round,
+            IsAntialias = true,
             Color = settings.Color.WithAlpha(alpha)
         };
 
         switch (settings.Kind)
         {
             case BrushKind.Pencil:
-                // 鉛筆風: アンチエイリアスを弱め、わずかに透ける
-                paint.IsAntialias = true;
+                // 鉛筆風: わずかに透ける
                 paint.Color = settings.Color.WithAlpha((byte)(alpha * 0.75f));
                 break;
 
             case BrushKind.Eraser:
                 // 透明で塗りつぶす = 消しゴム
-                paint.IsAntialias = true;
                 paint.BlendMode = SKBlendMode.Clear;
                 paint.Color = SKColors.Transparent.WithAlpha(alpha);
-                break;
-
-            default:
-                paint.IsAntialias = true;
                 break;
         }
 

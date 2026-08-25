@@ -56,11 +56,25 @@
 
     <Style TargetType="Menu">
         <Setter Property="Background" Value="{StaticResource PanelBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
     </Style>
 
-    <Style TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
+    <!--
+        メニュー項目の文字色。
+        ポップアップは Windows 標準の明るい背景のままなので、
+        そこだけ暗い文字にしないと読めなくなる。
+        メニューバー上の見出し（TopLevelHeader）は暗い背景なので明るい文字。
+        ポップアップ自体のダーク化はテーマ整備のときにまとめて行う。
+    -->
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="#1E1E1E" />
+        <Style.Triggers>
+            <Trigger Property="Role" Value="TopLevelHeader">
+                <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
+            </Trigger>
+            <Trigger Property="Role" Value="TopLevelItem">
+                <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
 </ResourceDictionary>

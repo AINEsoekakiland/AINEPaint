@@ -6,12 +6,13 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BackgroundBrush}">
+        Background="{StaticResource BackgroundBrush}"
+        TextElement.Foreground="{StaticResource ForegroundBrush}">
 
     <StackPanel Margin="20">
 
         <TextBlock Text="プリセット" Margin="0,0,0,6" />
-        <ComboBox x:Name="PresetBox" Height="30" SelectionChanged="OnPresetChanged">
+        <ComboBox x:Name="PresetBox" Height="30" Foreground="#1E1E1E" SelectionChanged="OnPresetChanged">
             <ComboBoxItem Content="1920 × 1080 （フルHD）" Tag="1920x1080" />
             <ComboBoxItem Content="2048 × 2048 （正方形）" Tag="2048x2048" />
             <ComboBoxItem Content="3000 × 3000 （大きめ）" Tag="3000x3000" />
@@ -26,13 +27,13 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Text="幅 (px)" Margin="0,0,0,6" />
-                <TextBox x:Name="WidthBox" Height="30" Padding="6,4"
+                <TextBox x:Name="WidthBox" Height="30" Padding="6,4" Foreground="#1E1E1E"
                          VerticalContentAlignment="Center"
                          TextChanged="OnSizeTextChanged" />
             </StackPanel>
             <StackPanel Grid.Column="2">
                 <TextBlock Text="高さ (px)" Margin="0,0,0,6" />
-                <TextBox x:Name="HeightBox" Height="30" Padding="6,4"
+                <TextBox x:Name="HeightBox" Height="30" Padding="6,4" Foreground="#1E1E1E"
                          VerticalContentAlignment="Center"
                          TextChanged="OnSizeTextChanged" />
             </StackPanel>
@@ -52,9 +53,9 @@
                    TextWrapping="Wrap" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-            <Button x:Name="OkButton" Content="作成" Width="96" Height="32"
+            <Button x:Name="OkButton" Content="作成" Width="96" Height="32" Foreground="#1E1E1E"
                     IsDefault="True" Click="OnOkClick" Margin="0,0,8,0" />
-            <Button Content="キャンセル" Width="96" Height="32"
+            <Button Content="キャンセル" Width="96" Height="32" Foreground="#1E1E1E"
                     IsCancel="True" />
         </StackPanel>
     </StackPanel>
