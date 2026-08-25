@@ -11,15 +11,15 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />  <!-- メニュー -->
-            <RowDefinition Height="*" />     <!-- 本体 -->
-            <RowDefinition Height="Auto" />  <!-- 下部バー -->
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- ===== メニュー ===== -->
         <Menu Grid.Row="0" Padding="4,2">
             <MenuItem Header="ファイル(_F)">
-                <MenuItem Header="新規キャンバス..." IsEnabled="False" />
+                <MenuItem Header="新規キャンバス..." InputGestureText="Ctrl+N" Click="OnNewCanvasClick" />
                 <MenuItem Header="開く..."           IsEnabled="False" />
                 <Separator />
                 <MenuItem Header="保存"              IsEnabled="False" />
@@ -28,17 +28,17 @@
                 <MenuItem Header="終了" Click="OnExitClick" />
             </MenuItem>
             <MenuItem Header="編集(_E)">
-                <MenuItem Header="元に戻す"     InputGestureText="Ctrl+Z"       IsEnabled="False" />
-                <MenuItem Header="やり直し"     InputGestureText="Ctrl+Shift+Z" IsEnabled="False" />
+                <MenuItem Header="元に戻す" InputGestureText="Ctrl+Z"       IsEnabled="False" />
+                <MenuItem Header="やり直し" InputGestureText="Ctrl+Shift+Z" IsEnabled="False" />
             </MenuItem>
             <MenuItem Header="表示(_V)">
-                <MenuItem Header="ズームイン"   IsEnabled="False" />
-                <MenuItem Header="ズームアウト" IsEnabled="False" />
-                <MenuItem Header="全体表示"     IsEnabled="False" />
+                <MenuItem Header="ズームイン"   InputGestureText="Ctrl++" Click="OnZoomInClick" />
+                <MenuItem Header="ズームアウト" InputGestureText="Ctrl+-" Click="OnZoomOutClick" />
+                <MenuItem Header="全体表示"     InputGestureText="Ctrl+0" Click="OnFitClick" />
             </MenuItem>
         </Menu>
 
-        <!-- ===== 本体: ツール | キャンバス | レイヤー ===== -->
+        <!-- ===== 本体 ===== -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="76" />
@@ -46,7 +46,6 @@
                 <ColumnDefinition Width="220" />
             </Grid.ColumnDefinitions>
 
-            <!-- ツールパネル -->
             <Border Grid.Column="0"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrush2}"
@@ -55,24 +54,19 @@
                     <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🖊" IsChecked="True" ToolTip="ペン" />
                     <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="✏"  ToolTip="鉛筆" />
                     <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🧽" ToolTip="消しゴム" />
-                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🖐" ToolTip="移動 (キャンバスをドラッグ)" />
+                    <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="🖐" ToolTip="移動（スペース+ドラッグ / 中ボタンドラッグ）" />
                     <ToggleButton Style="{StaticResource ToolButtonStyle}" Content="💧" ToolTip="スポイト" />
                 </StackPanel>
             </Border>
 
-            <!-- キャンバス領域 -->
             <Grid Grid.Column="1">
                 <drawing:CanvasView x:Name="Canvas" />
-                <TextBlock Text="STEP 5: 起動確認用の画面です。キャンバスは次のステップで実装します。"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Bottom"
-                           Margin="0,0,0,16"
-                           Opacity="0.5"
-                           FontSize="12"
-                           IsHitTestVisible="False" />
+                <TextBlock x:Name="EmptyHint"
+                           Text="ファイル → 新規キャンバス（Ctrl+N）でキャンバスを作成してください"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Opacity="0.45" FontSize="13" IsHitTestVisible="False" />
             </Grid>
 
-            <!-- レイヤーパネル -->
             <Border Grid.Column="2"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrush2}"
@@ -90,22 +84,23 @@
                 BorderBrush="{StaticResource BorderBrush2}"
                 BorderThickness="0,1,0,0"
                 Padding="12,8">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="サイズ" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <Slider Width="120" Minimum="1" Maximum="200" Value="12" IsEnabled="False" VerticalAlignment="Center" />
+            <DockPanel>
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Right"
+                           Text="キャンバスなし" Opacity="0.55" VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="サイズ" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Slider Width="120" Minimum="1" Maximum="200" Value="12" IsEnabled="False" VerticalAlignment="Center" />
 
-                <TextBlock Text="不透明度" VerticalAlignment="Center" Margin="24,0,8,0" />
-                <Slider Width="120" Minimum="0" Maximum="100" Value="100" IsEnabled="False" VerticalAlignment="Center" />
+                    <TextBlock Text="不透明度" VerticalAlignment="Center" Margin="24,0,8,0" />
+                    <Slider Width="120" Minimum="0" Maximum="100" Value="100" IsEnabled="False" VerticalAlignment="Center" />
 
-                <TextBlock Text="色" VerticalAlignment="Center" Margin="24,0,8,0" />
-                <Border Width="28" Height="28" CornerRadius="4"
-                        Background="White"
-                        BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
-                        ToolTip="現在の描画色" />
-
-                <TextBlock x:Name="StatusText" Text="AINE Paint v0.1.0"
-                           Opacity="0.4" VerticalAlignment="Center" Margin="32,0,0,0" />
-            </StackPanel>
+                    <TextBlock Text="色" VerticalAlignment="Center" Margin="24,0,8,0" />
+                    <Border Width="28" Height="28" CornerRadius="4"
+                            Background="White"
+                            BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
+                            ToolTip="現在の描画色" />
+                </StackPanel>
+            </DockPanel>
         </Border>
     </Grid>
 </Window>
