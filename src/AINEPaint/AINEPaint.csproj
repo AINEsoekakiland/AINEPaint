@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>AINEPaint</AssemblyName>
+    <RootNamespace>AINEPaint</RootNamespace>
+    <Version>0.1.0</Version>
+    <Company>StudioAINE</Company>
+    <Product>AINE Paint</Product>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 描画エンジン。MVPの中心になる依存なので、STEP 5 の時点で解決できるか確認する。 -->
+    <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.9" />
+  </ItemGroup>
+
+</Project>

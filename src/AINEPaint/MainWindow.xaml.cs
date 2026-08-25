@@ -1,0 +1,13 @@
+using System.Windows;
+
+namespace AINEPaint;
+
+public partial class MainWindow : Window
+{
+    public MainWindow()
+    {
+        InitializeComponent();
+    }
+
+    private void OnExitClick(object sender, RoutedEventArgs e) => Close();
+}
