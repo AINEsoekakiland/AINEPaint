@@ -6,6 +6,7 @@ using System.Windows.Media;
 using AINEPaint.Brushes;
 using AINEPaint.Color;
 using AINEPaint.Drawing;
+using AINEPaint.History;
 using AINEPaint.Views;
 using SkiaSharp;
 
@@ -14,14 +15,27 @@ namespace AINEPaint;
 public partial class MainWindow : Window
 {
     private PaintDocument? _document;
+    private readonly HistoryStack _history = new();
 
     public MainWindow()
     {
         InitializeComponent();
+
         Canvas.ViewStateChanged += UpdateStatus;
         Canvas.ColorPicked += ApplyBrushColor;
+        Canvas.BeforeDocumentChange += OnBeforeDocumentChange;
+        _history.Changed += UpdateHistoryMenu;
+
         ApplyBrushColor(SKColors.Black);
+        UpdateHistoryMenu();
         UpdateStatus();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        _history.Dispose();
+        _document?.Dispose();
     }
 
     // ===== ファイル =====
@@ -37,6 +51,9 @@ public partial class MainWindow : Window
 
         _document?.Dispose();
         _document = created;
+
+        // 前のキャンバスの履歴は意味を持たないので捨てる
+        _history.Clear();
 
         Canvas.Document = created;
         EmptyHint.Visibility = Visibility.Collapsed;
@@ -96,6 +113,38 @@ public partial class MainWindow : Window
         }
     }
 
+    // ===== Undo / Redo =====
+
+    private void OnBeforeDocumentChange(SKRect rect)
+    {
+        if (_document is null) return;
+        _history.Capture(_document, rect, "ブラシ");
+    }
+
+    private void OnUndoClick(object sender, RoutedEventArgs e) => PerformUndo();
+    private void OnRedoClick(object sender, RoutedEventArgs e) => PerformRedo();
+
+    private void PerformUndo()
+    {
+        if (_document is null || !_history.CanUndo) return;
+        _history.Undo(_document);
+        Canvas.InvalidateVisual();
+    }
+
+    private void PerformRedo()
+    {
+        if (_document is null || !_history.CanRedo) return;
+        _history.Redo(_document);
+        Canvas.InvalidateVisual();
+    }
+
+    private void UpdateHistoryMenu()
+    {
+        if (UndoMenuItem is null || RedoMenuItem is null) return;
+        UndoMenuItem.IsEnabled = _history.CanUndo;
+        RedoMenuItem.IsEnabled = _history.CanRedo;
+    }
+
     // ===== 色 =====
 
     private void OnColorButtonClick(object sender, RoutedEventArgs e)
@@ -145,10 +194,20 @@ public partial class MainWindow : Window
 
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
 
+        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+
         if (ctrl)
         {
             switch (e.Key)
             {
+                case Key.Z:
+                    if (shift) PerformRedo(); else PerformUndo();
+                    e.Handled = true;
+                    return;
+                case Key.Y:
+                    PerformRedo();
+                    e.Handled = true;
+                    return;
                 case Key.N:
                     CreateNewCanvas();
                     e.Handled = true;

@@ -29,8 +29,10 @@
                 <MenuItem Header="終了" Click="OnExitClick" />
             </MenuItem>
             <MenuItem Header="編集(_E)">
-                <MenuItem Header="元に戻す" InputGestureText="Ctrl+Z"       IsEnabled="False" />
-                <MenuItem Header="やり直し" InputGestureText="Ctrl+Shift+Z" IsEnabled="False" />
+                <MenuItem x:Name="UndoMenuItem" Header="元に戻す" InputGestureText="Ctrl+Z"
+                          IsEnabled="False" Click="OnUndoClick" />
+                <MenuItem x:Name="RedoMenuItem" Header="やり直し" InputGestureText="Ctrl+Shift+Z"
+                          IsEnabled="False" Click="OnRedoClick" />
             </MenuItem>
             <MenuItem Header="表示(_V)">
                 <MenuItem Header="ズームイン"   InputGestureText="Ctrl++" Click="OnZoomInClick" />

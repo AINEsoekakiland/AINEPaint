@@ -48,6 +48,12 @@ public class CanvasView : SKElement
     /// <summary>スポイトで色を拾ったときに発火。</summary>
     public event Action<SKColor>? ColorPicked;
 
+    /// <summary>
+    /// ドキュメントの画素を書き換える直前に、書き換わる範囲を通知する。
+    /// Undo 履歴は「変更前の中身」を必要とするので、必ずこの時点で記録する。
+    /// </summary>
+    public event Action<SKRect>? BeforeDocumentChange;
+
     public CanvasView()
     {
         Focusable = true;
@@ -261,11 +267,8 @@ public class CanvasView : SKElement
 
         if (_isDrawing && e.ChangedButton == MouseButton.Left)
         {
-            _isDrawing = false;
-            var dirty = _stroke.End();
+            FinishStroke();
             ReleaseMouseCapture();
-            InvalidateVisual();
-            StrokeCompleted?.Invoke(dirty);
         }
     }
 
@@ -280,6 +283,12 @@ public class CanvasView : SKElement
     {
         if (!_isDrawing) return;
         _isDrawing = false;
+
+        // 合成前に、これから書き換わる範囲を通知する
+        var pending = _stroke.DirtyRect;
+        if (!pending.IsEmpty)
+            BeforeDocumentChange?.Invoke(pending);
+
         var dirty = _stroke.End();
         InvalidateVisual();
         StrokeCompleted?.Invoke(dirty);
