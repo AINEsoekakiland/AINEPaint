@@ -71,7 +71,21 @@ public class CanvasView : SKElement
         set
         {
             FinishStroke();
+
+            if (_document is not null)
+            {
+                _document.ContentChanged -= InvalidateVisual;
+                _document.StructureChanged -= InvalidateVisual;
+            }
+
             _document = value;
+
+            if (_document is not null)
+            {
+                _document.ContentChanged += InvalidateVisual;
+                _document.StructureChanged += InvalidateVisual;
+            }
+
             Cursor = value is null ? Cursors.Arrow : Cursors.Cross;
             FitToWindow();
             InvalidateVisual();
@@ -132,31 +146,18 @@ public class CanvasView : SKElement
             canvas.DrawRect(screenRect, whitePaint);
         }
 
-        // ドキュメント本体 ＋ 描画中のストローク
-        using (var paint = new SKPaint
-               {
-                   FilterQuality = Viewport.Scale >= 1f ? SKFilterQuality.None : SKFilterQuality.Medium
-               })
+        // 全レイヤーの合成。描画中のストロークは選択中レイヤーの中で重ねる
+        // （PaintDocument.Render が SaveLayer でグループ化しているので、
+        //  消しゴムが下のレイヤーや背景まで削ってしまうことはない）
         {
             var preview = _stroke.PreviewBuffer;
             using SKPaint? previewPaint = preview is null ? null : _stroke.CreatePreviewPaint();
 
-            // 消しゴムのプレビューは「下の絵を削る」処理なので、
-            // ドキュメントと同じレイヤー内で合成しないと背景まで削ってしまう
-            bool needsLayer = preview is not null && _stroke.IsErasing;
+            var quality = Viewport.Scale >= 1f ? SKFilterQuality.None : SKFilterQuality.Medium;
 
             canvas.Save();
-            if (needsLayer)
-                canvas.SaveLayer(null);
-
             canvas.SetMatrix(matrix);
-            canvas.DrawBitmap(_document.Bitmap, 0, 0, paint);
-
-            if (preview is not null && previewPaint is not null)
-                canvas.DrawBitmap(preview, 0, 0, previewPaint);
-
-            if (needsLayer)
-                canvas.Restore();
+            _document.Render(canvas, preview, previewPaint, quality);
             canvas.Restore();
         }
 
@@ -224,8 +225,11 @@ public class CanvasView : SKElement
 
         if (e.ChangedButton == MouseButton.Left)
         {
+            // 非表示のレイヤーには描かない（描いても見えず、事故のもとになる）
+            if (_document.ActiveLayer is not { IsVisible: true } target) return;
+
             _isDrawing = true;
-            _stroke.Begin(_document.Bitmap, Brush, ToStrokePoint(e));
+            _stroke.Begin(target.Bitmap, Brush, ToStrokePoint(e));
             CaptureMouse();
             InvalidateVisual();
             e.Handled = true;
@@ -311,13 +315,8 @@ public class CanvasView : SKElement
         int y = (int)MathF.Floor(doc.Y);
         if (x < 0 || y < 0 || x >= _document.Width || y >= _document.Height) return;
 
-        var color = _document.Bitmap.GetPixel(x, y);
-
-        if (color.Alpha == 0)
-        {
-            if (_document.Background != CanvasBackground.White) return;
-            color = SKColors.White;
-        }
+        var color = _document.SamplePixel(x, y);
+        if (color.Alpha == 0) return;
 
         ColorPicked?.Invoke(new SKColor(color.Red, color.Green, color.Blue));
     }

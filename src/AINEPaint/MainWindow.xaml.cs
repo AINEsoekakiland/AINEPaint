@@ -7,6 +7,7 @@ using AINEPaint.Brushes;
 using AINEPaint.Color;
 using AINEPaint.Drawing;
 using AINEPaint.History;
+using AINEPaint.Layers;
 using AINEPaint.Views;
 using SkiaSharp;
 
@@ -16,6 +17,9 @@ public partial class MainWindow : Window
 {
     private PaintDocument? _document;
     private readonly HistoryStack _history = new();
+
+    /// <summary>レイヤー一覧の更新と選択変更が互いを呼び合わないようにするための番人。</summary>
+    private bool _syncingLayers;
 
     public MainWindow()
     {
@@ -47,7 +51,7 @@ public partial class MainWindow : Window
         var dialog = new NewCanvasDialog { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        var created = new PaintDocument(dialog.CanvasWidth, dialog.CanvasHeight, dialog.Background);
+        var created = new PaintDocument(dialog.CanvasWidth, dialog.CanvasHeight, dialog.BackgroundMode);
 
         _document?.Dispose();
         _document = created;
@@ -55,8 +59,11 @@ public partial class MainWindow : Window
         // 前のキャンバスの履歴は意味を持たないので捨てる
         _history.Clear();
 
+        created.StructureChanged += RefreshLayerPanel;
+
         Canvas.Document = created;
         EmptyHint.Visibility = Visibility.Collapsed;
+        RefreshLayerPanel();
         UpdateStatus();
     }
 
@@ -117,8 +124,8 @@ public partial class MainWindow : Window
 
     private void OnBeforeDocumentChange(SKRect rect)
     {
-        if (_document is null) return;
-        _history.Capture(_document, rect, "ブラシ");
+        if (_document?.ActiveLayer is not { } layer) return;
+        _history.CapturePixels(_document, layer, rect, "ブラシ");
     }
 
     private void OnUndoClick(object sender, RoutedEventArgs e) => PerformUndo();
@@ -128,6 +135,7 @@ public partial class MainWindow : Window
     {
         if (_document is null || !_history.CanUndo) return;
         _history.Undo(_document);
+        RefreshLayerPanel();
         Canvas.InvalidateVisual();
     }
 
@@ -135,6 +143,7 @@ public partial class MainWindow : Window
     {
         if (_document is null || !_history.CanRedo) return;
         _history.Redo(_document);
+        RefreshLayerPanel();
         Canvas.InvalidateVisual();
     }
 
@@ -143,6 +152,123 @@ public partial class MainWindow : Window
         if (UndoMenuItem is null || RedoMenuItem is null) return;
         UndoMenuItem.IsEnabled = _history.CanUndo;
         RedoMenuItem.IsEnabled = _history.CanRedo;
+    }
+
+    // ===== レイヤー =====
+
+    private void OnAddLayerClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null) return;
+        _history.CaptureStructure(_document, "レイヤーを追加");
+        _document.AddLayer();
+    }
+
+    private void OnDuplicateLayerClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null) return;
+        _history.CaptureStructure(_document, "レイヤーを複製");
+        _document.DuplicateActiveLayer();
+    }
+
+    private void OnDeleteLayerClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null) return;
+
+        if (_document.Layers.Count <= 1)
+        {
+            MessageBox.Show(this, "最後のレイヤーは削除できません。", "AINE Paint",
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _history.CaptureStructure(_document, "レイヤーを削除");
+        if (!_document.RemoveActiveLayer())
+            PerformUndo();   // 実際には消せなかったので記録を取り消す
+    }
+
+    private void OnMoveLayerUpClick(object sender, RoutedEventArgs e) => MoveActiveLayer(1);
+    private void OnMoveLayerDownClick(object sender, RoutedEventArgs e) => MoveActiveLayer(-1);
+
+    private void MoveActiveLayer(int offset)
+    {
+        if (_document is null) return;
+
+        _history.CaptureStructure(_document, "レイヤーの並び替え");
+        if (!_document.MoveActiveLayer(offset))
+            PerformUndo();
+    }
+
+    private void OnLayerSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingLayers || _document is null) return;
+        if (LayerList.SelectedIndex < 0) return;
+
+        // 一覧は上下を反転して見せているので、添字も反転する
+        _document.ActiveLayerIndex = _document.Layers.Count - 1 - LayerList.SelectedIndex;
+        UpdateLayerOpacityControl();
+    }
+
+    private void OnLayerListDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_document?.ActiveLayer is not { } layer) return;
+
+        var dialog = new TextInputDialog("レイヤー名", layer.Name) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        layer.Name = dialog.Value;
+        RefreshLayerPanel();
+    }
+
+    private void OnLayerOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (LayerOpacityText is not null)
+            LayerOpacityText.Text = $"{(int)e.NewValue}%";
+
+        if (_syncingLayers || _document?.ActiveLayer is not { } layer) return;
+        layer.Opacity = (float)(e.NewValue / 100.0);
+    }
+
+    private void RefreshLayerPanel()
+    {
+        if (LayerList is null) return;
+
+        _syncingLayers = true;
+        try
+        {
+            if (_document is null)
+            {
+                LayerList.ItemsSource = null;
+                return;
+            }
+
+            // 一番上のレイヤーを一覧の先頭に見せる
+            var reversed = _document.Layers.Reverse().ToList();
+            LayerList.ItemsSource = reversed;
+            LayerList.SelectedIndex = _document.Layers.Count - 1 - _document.ActiveLayerIndex;
+        }
+        finally
+        {
+            _syncingLayers = false;
+        }
+
+        UpdateLayerOpacityControl();
+    }
+
+    private void UpdateLayerOpacityControl()
+    {
+        if (LayerOpacitySlider is null) return;
+
+        _syncingLayers = true;
+        try
+        {
+            LayerOpacitySlider.IsEnabled = _document?.ActiveLayer is not null;
+            if (_document?.ActiveLayer is { } layer)
+                LayerOpacitySlider.Value = Math.Round(layer.Opacity * 100.0);
+        }
+        finally
+        {
+            _syncingLayers = false;
+        }
     }
 
     // ===== 色 =====

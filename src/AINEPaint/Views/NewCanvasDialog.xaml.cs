@@ -11,7 +11,7 @@ public partial class NewCanvasDialog : Window
 
     public int CanvasWidth { get; private set; } = 1920;
     public int CanvasHeight { get; private set; } = 1080;
-    public CanvasBackground Background { get; private set; } = CanvasBackground.White;
+    public CanvasBackground BackgroundMode { get; private set; } = CanvasBackground.White;
 
     public NewCanvasDialog()
     {
@@ -86,7 +86,7 @@ public partial class NewCanvasDialog : Window
 
         CanvasWidth = int.Parse(WidthBox.Text, CultureInfo.InvariantCulture);
         CanvasHeight = int.Parse(HeightBox.Text, CultureInfo.InvariantCulture);
-        Background = TransparentBgRadio.IsChecked == true
+        BackgroundMode = TransparentBgRadio.IsChecked == true
             ? CanvasBackground.Transparent
             : CanvasBackground.White;
 

@@ -86,7 +86,51 @@
                     BorderThickness="1,0,0,0">
                 <DockPanel Margin="8">
                     <TextBlock DockPanel.Dock="Top" Text="レイヤー" FontSize="14" FontWeight="Bold" Margin="2,4,2,8" />
-                    <TextBlock Text="（未実装）" Opacity="0.4" FontSize="12" Margin="2,0" VerticalAlignment="Top" />
+
+                    <UniformGrid DockPanel.Dock="Bottom" Rows="1" Columns="5" Margin="0,8,0,0">
+                        <Button Content="＋" Height="30" Margin="1,0" Foreground="#1E1E1E"
+                                Click="OnAddLayerClick" ToolTip="レイヤーを追加" />
+                        <Button Content="⧉" Height="30" Margin="1,0" Foreground="#1E1E1E"
+                                Click="OnDuplicateLayerClick" ToolTip="レイヤーを複製" />
+                        <Button Content="🗑" Height="30" Margin="1,0" Foreground="#1E1E1E"
+                                Click="OnDeleteLayerClick" ToolTip="レイヤーを削除" />
+                        <Button Content="↑" Height="30" Margin="1,0" Foreground="#1E1E1E"
+                                Click="OnMoveLayerUpClick" ToolTip="1つ上へ" />
+                        <Button Content="↓" Height="30" Margin="1,0" Foreground="#1E1E1E"
+                                Click="OnMoveLayerDownClick" ToolTip="1つ下へ" />
+                    </UniformGrid>
+
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                        <DockPanel>
+                            <TextBlock x:Name="LayerOpacityText" DockPanel.Dock="Right"
+                                       Text="100%" FontSize="12" Opacity="0.7" />
+                            <TextBlock Text="レイヤー不透明度" FontSize="12" Opacity="0.7" />
+                        </DockPanel>
+                        <Slider x:Name="LayerOpacitySlider" Minimum="0" Maximum="100" Value="100"
+                                IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,4,0,0"
+                                ValueChanged="OnLayerOpacityChanged" />
+                    </StackPanel>
+
+                    <ListBox x:Name="LayerList"
+                             Background="{StaticResource PanelBrush}"
+                             BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
+                             HorizontalContentAlignment="Stretch"
+                             SelectionChanged="OnLayerSelectionChanged"
+                             MouseDoubleClick="OnLayerListDoubleClick"
+                             ToolTip="ダブルクリックで名前を変更できます">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Height="28">
+                                    <CheckBox DockPanel.Dock="Left"
+                                              IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                              VerticalAlignment="Center" Margin="2,0,8,0"
+                                              ToolTip="表示 / 非表示" />
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </DockPanel>
             </Border>
         </Grid>

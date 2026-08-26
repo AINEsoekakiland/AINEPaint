@@ -1,4 +1,5 @@
 using AINEPaint.Drawing;
+using AINEPaint.Layers;
 using SkiaSharp;
 
 namespace AINEPaint.History;
@@ -6,17 +7,17 @@ namespace AINEPaint.History;
 /// <summary>
 /// Undo / Redo の履歴。
 ///
-/// ドキュメント全体を毎回複製するのではなく、
-/// 「書き換わったタイルの、書き換わる直前の中身」だけを保存する。
-/// 細い線を1本引いた程度なら数百KBで済む。
+/// 画素の変更は「書き換わったタイルの、書き換わる直前の中身」だけを保存する。
+/// レイヤーの追加・削除・並び替えは参照と並び順だけを保存する。
+/// どちらも Undo / Redo は「入れ替え」という同じ操作で処理できる。
 ///
 /// 上限は手数とメモリ量の両方で見る。どちらかに達したら古い履歴から捨てる。
 /// 将来の設定画面から変えられるよう、値はプロパティにしてある。
 /// </summary>
 public sealed class HistoryStack : IDisposable
 {
-    private readonly List<HistoryEntry> _undo = new();
-    private readonly List<HistoryEntry> _redo = new();
+    private readonly List<IHistoryEntry> _undo = new();
+    private readonly List<IHistoryEntry> _redo = new();
 
     public int MaxEntries { get; set; } = 50;
     public long MaxBytes { get; set; } = 512L * 1024 * 1024;
@@ -28,21 +29,21 @@ public sealed class HistoryStack : IDisposable
     public event Action? Changed;
 
     /// <summary>
-    /// これから書き換わる範囲の「今の中身」を記録する。
-    /// 必ずドキュメントを変更する<em>前</em>に呼ぶこと。
+    /// これから書き換わる画素範囲の「今の中身」を記録する。
+    /// 必ずレイヤーを変更する前に呼ぶこと。
     /// </summary>
-    public void Capture(PaintDocument document, SKRect rect, string label)
+    public void CapturePixels(PaintDocument document, Layer layer, SKRect rect, string label)
     {
         if (rect.IsEmpty) return;
 
-        var entry = new HistoryEntry(label);
+        var entry = new TileHistoryEntry(label, layer);
 
         foreach (var (tx, ty) in TileStore.TilesOverlapping(rect, document.Width, document.Height))
         {
             var bounds = TileStore.BoundsOf(tx, ty, document.Width, document.Height);
             if (bounds.Width <= 0 || bounds.Height <= 0) continue;
 
-            entry.AddTile(tx, ty, TileStore.Copy(document.Bitmap, bounds));
+            entry.AddTile(tx, ty, TileStore.Copy(layer.Bitmap, bounds));
         }
 
         if (entry.IsEmpty)
@@ -51,6 +52,21 @@ public sealed class HistoryStack : IDisposable
             return;
         }
 
+        Push(entry);
+    }
+
+    /// <summary>
+    /// レイヤー構成を変える操作の「変更前の状態」を記録する。
+    /// 必ず操作する前に呼ぶこと。
+    /// </summary>
+    public void CaptureStructure(PaintDocument document, string label)
+    {
+        var (layers, activeIndex) = document.SnapshotStructure();
+        Push(new StructureHistoryEntry(label, layers, activeIndex));
+    }
+
+    private void Push(IHistoryEntry entry)
+    {
         _undo.Add(entry);
 
         // 新しい操作をした時点で、やり直せる先は消える
@@ -60,26 +76,23 @@ public sealed class HistoryStack : IDisposable
         Changed?.Invoke();
     }
 
-    /// <summary>直前の操作を取り消す。再描画が必要な範囲を返す。</summary>
-    public SKRect Undo(PaintDocument document) => Move(_undo, _redo, document);
+    public void Undo(PaintDocument document) => Move(_undo, _redo, document);
 
-    /// <summary>取り消した操作をやり直す。再描画が必要な範囲を返す。</summary>
-    public SKRect Redo(PaintDocument document) => Move(_redo, _undo, document);
+    public void Redo(PaintDocument document) => Move(_redo, _undo, document);
 
-    private SKRect Move(List<HistoryEntry> from, List<HistoryEntry> to, PaintDocument document)
+    private void Move(List<IHistoryEntry> from, List<IHistoryEntry> to, PaintDocument document)
     {
-        if (from.Count == 0) return SKRect.Empty;
+        if (from.Count == 0) return;
 
         var entry = from[^1];
         from.RemoveAt(from.Count - 1);
 
-        // 入れ替えた結果、entry には「入れ替える前の中身」が入る。
+        // 入れ替えた結果、entry には「入れ替える前の状態」が入る。
         // そのまま反対側のスタックへ積めば、逆操作としてそのまま使える。
-        var affected = entry.SwapWith(document.Bitmap, document.Width, document.Height);
+        entry.Swap(document);
         to.Add(entry);
 
         Changed?.Invoke();
-        return affected;
     }
 
     /// <summary>キャンバスを作り直したときなど、履歴が意味を失う場面で呼ぶ。</summary>
