@@ -39,6 +39,9 @@ public class CanvasView : SKElement
     /// <summary>スポイトが選択されている間 true。左クリックで色を拾う。</summary>
     public bool EyedropperActive { get; set; }
 
+    /// <summary>塗りつぶしが選択されている間 true。左クリックで塗る。</summary>
+    public bool FillToolActive { get; set; }
+
     /// <summary>表示状態（倍率・サイズ）が変わったときに発火。ステータスバー更新用。</summary>
     public event Action? ViewStateChanged;
 
@@ -223,6 +226,13 @@ public class CanvasView : SKElement
             return;
         }
 
+        if (e.ChangedButton == MouseButton.Left && FillToolActive)
+        {
+            FillAt(e);
+            e.Handled = true;
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left)
         {
             // 非表示のレイヤーには描かない（描いても見えず、事故のもとになる）
@@ -296,6 +306,43 @@ public class CanvasView : SKElement
         var dirty = _stroke.End();
         InvalidateVisual();
         StrokeCompleted?.Invoke(dirty);
+    }
+
+    /// <summary>
+    /// クリック位置から塗りつぶす。
+    /// 塗る範囲を先に求めてから履歴に記録し、そのあとで適用する。
+    /// </summary>
+    private void FillAt(MouseEventArgs e)
+    {
+        if (_document is null) return;
+        if (_document.ActiveLayer is not { IsVisible: true } target) return;
+
+        var p = e.GetPosition(this);
+        float s = DpiScale;
+        var doc = Viewport.ToDocument((float)p.X * s, (float)p.Y * s);
+
+        int x = (int)MathF.Floor(doc.X);
+        int y = (int)MathF.Floor(doc.Y);
+        if (x < 0 || y < 0 || x >= _document.Width || y >= _document.Height) return;
+
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            using var mask = FloodFill.Compute(target.Bitmap, x, y, Brush.FillTolerance, Brush.FillExpand);
+            if (mask is null) return;
+
+            var bounds = new SKRect(mask.Bounds.Left, mask.Bounds.Top, mask.Bounds.Right, mask.Bounds.Bottom);
+            BeforeDocumentChange?.Invoke(bounds);
+
+            FloodFill.Apply(target.Bitmap, mask, Brush.Color);
+
+            InvalidateVisual();
+            StrokeCompleted?.Invoke(bounds);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
     }
 
     /// <summary>

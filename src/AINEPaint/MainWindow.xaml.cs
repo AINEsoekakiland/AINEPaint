@@ -259,6 +259,14 @@ public partial class MainWindow : Window
 
         Canvas.PanToolActive = tag == "Pan";
         Canvas.EyedropperActive = tag == "Picker";
+        Canvas.FillToolActive = tag == "Fill";
+
+        if (BrushOptions is not null && FillOptions is not null)
+        {
+            bool isFill = tag == "Fill";
+            BrushOptions.Visibility = isFill ? Visibility.Collapsed : Visibility.Visible;
+            FillOptions.Visibility = isFill ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         switch (tag)
         {
@@ -487,6 +495,22 @@ public partial class MainWindow : Window
         OpacityValueText.Text = $"{(int)e.NewValue}%";
     }
 
+    private void OnToleranceChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (Canvas is null || ToleranceValueText is null) return;
+
+        Canvas.Brush.FillTolerance = (int)e.NewValue;
+        ToleranceValueText.Text = ((int)e.NewValue).ToString();
+    }
+
+    private void OnFillExpandChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (Canvas is null || FillExpandValueText is null) return;
+
+        Canvas.Brush.FillExpand = (int)e.NewValue;
+        FillExpandValueText.Text = ((int)e.NewValue).ToString();
+    }
+
     private void NudgeBrushSize(double delta)
     {
         SizeSlider.Value = Math.Clamp(SizeSlider.Value + delta, SizeSlider.Minimum, SizeSlider.Maximum);
@@ -556,6 +580,7 @@ public partial class MainWindow : Window
             case Key.E: SelectTool("Eraser"); e.Handled = true; return;
             case Key.H: SelectTool("Pan"); e.Handled = true; return;
             case Key.I: SelectTool("Picker"); e.Handled = true; return;
+            case Key.G: SelectTool("Fill"); e.Handled = true; return;
 
             case Key.OemOpenBrackets:
                 NudgeBrushSize(-Math.Max(1, SizeSlider.Value * 0.1));

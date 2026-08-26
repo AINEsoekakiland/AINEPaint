@@ -66,6 +66,9 @@
                                  Content="🧽" Tag="Eraser" Checked="OnToolChecked"
                                  ToolTip="消しゴム (E)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
+                                 Content="🪣" Tag="Fill" Checked="OnToolChecked"
+                                 ToolTip="塗りつぶし (G)" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Content="🖐" Tag="Pan" Checked="OnToolChecked"
                                  ToolTip="移動 (H) ／ スペース+ドラッグ・中ボタンドラッグでも可" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
@@ -147,6 +150,7 @@
                 <TextBlock x:Name="StatusText" DockPanel.Dock="Right"
                            Text="キャンバスなし" Opacity="0.55" VerticalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <StackPanel x:Name="BrushOptions" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="サイズ" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Slider x:Name="SizeSlider" Width="140" Minimum="1" Maximum="200" Value="12"
                             SmallChange="1" LargeChange="8" IsSnapToTickEnabled="True" TickFrequency="1"
@@ -161,6 +165,26 @@
                             VerticalAlignment="Center" ValueChanged="OnOpacityChanged" />
                     <TextBlock x:Name="OpacityValueText" Text="100%" Width="42" TextAlignment="Right"
                                VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.7" />
+                  </StackPanel>
+
+                  <StackPanel x:Name="FillOptions" Orientation="Horizontal" VerticalAlignment="Center"
+                              Visibility="Collapsed">
+                    <TextBlock Text="許容値" VerticalAlignment="Center" Margin="0,0,8,0"
+                               ToolTip="大きくすると、色の近い部分までまとめて塗ります" />
+                    <Slider x:Name="ToleranceSlider" Width="140" Minimum="0" Maximum="128" Value="24"
+                            IsSnapToTickEnabled="True" TickFrequency="1"
+                            VerticalAlignment="Center" ValueChanged="OnToleranceChanged" />
+                    <TextBlock x:Name="ToleranceValueText" Text="24" Width="34" TextAlignment="Right"
+                               VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.7" />
+
+                    <TextBlock Text="はみ出し" VerticalAlignment="Center" Margin="24,0,8,0"
+                               ToolTip="線の縁に白い隙間が残るときは大きくします" />
+                    <Slider x:Name="FillExpandSlider" Width="100" Minimum="0" Maximum="6" Value="1"
+                            IsSnapToTickEnabled="True" TickFrequency="1"
+                            VerticalAlignment="Center" ValueChanged="OnFillExpandChanged" />
+                    <TextBlock x:Name="FillExpandValueText" Text="1" Width="24" TextAlignment="Right"
+                               VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.7" />
+                  </StackPanel>
 
                     <TextBlock Text="色" VerticalAlignment="Center" Margin="24,0,8,0" />
                     <Button x:Name="ColorButton" Width="30" Height="30" Padding="0"
