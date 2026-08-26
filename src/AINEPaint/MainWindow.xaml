@@ -65,8 +65,8 @@
                                  Content="🖐" Tag="Pan" Checked="OnToolChecked"
                                  ToolTip="移動 (H) ／ スペース+ドラッグ・中ボタンドラッグでも可" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="💧" Tag="Picker" IsEnabled="False"
-                                 ToolTip="スポイト（未実装）" />
+                                 Content="💧" Tag="Picker" Checked="OnToolChecked"
+                                 ToolTip="スポイト (I)" />
                 </StackPanel>
             </Border>
 
@@ -115,10 +115,10 @@
                                VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.7" />
 
                     <TextBlock Text="色" VerticalAlignment="Center" Margin="24,0,8,0" />
-                    <Border Width="28" Height="28" CornerRadius="4"
-                            Background="Black"
-                            BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
-                            ToolTip="現在の描画色（STEP 8b で変更できるようにします）" />
+                    <Button x:Name="ColorButton" Width="30" Height="30" Padding="0"
+                            Background="Black" BorderBrush="{StaticResource BorderBrush2}"
+                            BorderThickness="1" Cursor="Hand" Click="OnColorButtonClick"
+                            ToolTip="描画色を選ぶ（スポイトは I）" />
                 </StackPanel>
             </DockPanel>
         </Border>

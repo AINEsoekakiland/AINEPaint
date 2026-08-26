@@ -2,9 +2,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using AINEPaint.Brushes;
+using AINEPaint.Color;
 using AINEPaint.Drawing;
 using AINEPaint.Views;
+using SkiaSharp;
 
 namespace AINEPaint;
 
@@ -16,6 +19,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Canvas.ViewStateChanged += UpdateStatus;
+        Canvas.ColorPicked += ApplyBrushColor;
+        ApplyBrushColor(SKColors.Black);
         UpdateStatus();
     }
 
@@ -60,6 +65,7 @@ public partial class MainWindow : Window
         if (Canvas is null) return;
 
         Canvas.PanToolActive = tag == "Pan";
+        Canvas.EyedropperActive = tag == "Picker";
 
         switch (tag)
         {
@@ -88,6 +94,24 @@ public partial class MainWindow : Window
                 return;
             }
         }
+    }
+
+    // ===== 色 =====
+
+    private void OnColorButtonClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ColorPickerDialog(Canvas.Brush.Color) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        ApplyBrushColor(dialog.SelectedColor);
+    }
+
+    private void ApplyBrushColor(SKColor color)
+    {
+        if (Canvas is null || ColorButton is null) return;
+
+        Canvas.Brush.Color = color;
+        ColorButton.Background = new SolidColorBrush(ColorUtil.ToWpf(color));
     }
 
     // ===== ブラシ設定 =====
@@ -154,6 +178,7 @@ public partial class MainWindow : Window
             case Key.N: SelectTool("Pencil"); e.Handled = true; return;
             case Key.E: SelectTool("Eraser"); e.Handled = true; return;
             case Key.H: SelectTool("Pan"); e.Handled = true; return;
+            case Key.I: SelectTool("Picker"); e.Handled = true; return;
 
             case Key.OemOpenBrackets:
                 NudgeBrushSize(-Math.Max(1, SizeSlider.Value * 0.1));

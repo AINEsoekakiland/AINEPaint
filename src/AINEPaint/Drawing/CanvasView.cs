@@ -36,11 +36,17 @@ public class CanvasView : SKElement
     /// <summary>移動ツールが選択されている間 true。左ドラッグがパンになる。</summary>
     public bool PanToolActive { get; set; }
 
+    /// <summary>スポイトが選択されている間 true。左クリックで色を拾う。</summary>
+    public bool EyedropperActive { get; set; }
+
     /// <summary>表示状態（倍率・サイズ）が変わったときに発火。ステータスバー更新用。</summary>
     public event Action? ViewStateChanged;
 
     /// <summary>1ストロークが完了したときに発火。STEP 9 の Undo 記録で使う。</summary>
     public event Action<SKRect>? StrokeCompleted;
+
+    /// <summary>スポイトで色を拾ったときに発火。</summary>
+    public event Action<SKColor>? ColorPicked;
 
     public CanvasView()
     {
@@ -203,6 +209,13 @@ public class CanvasView : SKElement
             return;
         }
 
+        if (e.ChangedButton == MouseButton.Left && EyedropperActive)
+        {
+            PickColorAt(e);
+            e.Handled = true;
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left)
         {
             _isDrawing = true;
@@ -270,6 +283,34 @@ public class CanvasView : SKElement
         var dirty = _stroke.End();
         InvalidateVisual();
         StrokeCompleted?.Invoke(dirty);
+    }
+
+    /// <summary>
+    /// クリック位置の色を拾う。
+    /// 画素が透明な場合は、その下に見えている背景（白キャンバスなら白）を返す。
+    /// 透明背景のキャンバスでは市松模様は色ではないので何もしない。
+    /// </summary>
+    private void PickColorAt(MouseEventArgs e)
+    {
+        if (_document is null) return;
+
+        var p = e.GetPosition(this);
+        float s = DpiScale;
+        var doc = Viewport.ToDocument((float)p.X * s, (float)p.Y * s);
+
+        int x = (int)MathF.Floor(doc.X);
+        int y = (int)MathF.Floor(doc.Y);
+        if (x < 0 || y < 0 || x >= _document.Width || y >= _document.Height) return;
+
+        var color = _document.Bitmap.GetPixel(x, y);
+
+        if (color.Alpha == 0)
+        {
+            if (_document.Background != CanvasBackground.White) return;
+            color = SKColors.White;
+        }
+
+        ColorPicked?.Invoke(new SKColor(color.Red, color.Green, color.Blue));
     }
 
     /// <summary>画面座標をドキュメント座標へ変換し、可能なら筆圧も拾う。</summary>
