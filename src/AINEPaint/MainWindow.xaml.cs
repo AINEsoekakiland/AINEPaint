@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -7,8 +8,10 @@ using AINEPaint.Brushes;
 using AINEPaint.Color;
 using AINEPaint.Drawing;
 using AINEPaint.History;
+using AINEPaint.IO;
 using AINEPaint.Layers;
 using AINEPaint.Views;
+using Microsoft.Win32;
 using SkiaSharp;
 
 namespace AINEPaint;
@@ -20,6 +23,12 @@ public partial class MainWindow : Window
 
     /// <summary>レイヤー一覧の更新と選択変更が互いを呼び合わないようにするための番人。</summary>
     private bool _syncingLayers;
+
+    /// <summary>保存先。まだ一度も保存していない場合は null。</summary>
+    private string? _currentPath;
+
+    /// <summary>最後に保存してから変更があるか。</summary>
+    private bool _isDirty;
 
     public MainWindow()
     {
@@ -48,23 +57,183 @@ public partial class MainWindow : Window
 
     private void CreateNewCanvas()
     {
+        if (!ConfirmDiscardChanges()) return;
+
         var dialog = new NewCanvasDialog { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        var created = new PaintDocument(dialog.CanvasWidth, dialog.CanvasHeight, dialog.BackgroundMode);
+        SetDocument(new PaintDocument(dialog.CanvasWidth, dialog.CanvasHeight, dialog.BackgroundMode), null);
+    }
 
+    /// <summary>ドキュメントを差し替える。履歴・レイヤー一覧・タイトルもここで揃える。</summary>
+    private void SetDocument(PaintDocument document, string? path)
+    {
         _document?.Dispose();
-        _document = created;
+        _document = document;
 
         // 前のキャンバスの履歴は意味を持たないので捨てる
         _history.Clear();
 
-        created.StructureChanged += RefreshLayerPanel;
+        document.StructureChanged += RefreshLayerPanel;
 
-        Canvas.Document = created;
+        Canvas.Document = document;
         EmptyHint.Visibility = Visibility.Collapsed;
+
+        _currentPath = path;
+        _isDirty = false;
+
         RefreshLayerPanel();
         UpdateStatus();
+        UpdateTitle();
+    }
+
+    // ===== 開く / 保存 =====
+
+    private void OnOpenClick(object sender, RoutedEventArgs e)
+    {
+        if (!ConfirmDiscardChanges()) return;
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "開く",
+            Filter = $"対応ファイル (*.ainpaint;*.png;*.jpg;*.jpeg)|*.ainpaint;*.png;*.jpg;*.jpeg|" +
+                     $"{ProjectFile.FileFilter}|{ImageFile.OpenFilter}"
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            bool isProject = string.Equals(Path.GetExtension(dialog.FileName),
+                                           ProjectFile.Extension, StringComparison.OrdinalIgnoreCase);
+
+            if (isProject)
+                SetDocument(ProjectFile.Load(dialog.FileName), dialog.FileName);
+            else
+                // 画像から始めた場合は上書き保存先を持たせない（元画像を壊さないため）
+                SetDocument(ImageFile.Import(dialog.FileName), null);
+        }
+        catch (Exception ex)
+        {
+            ShowError("開けませんでした。", ex);
+        }
+    }
+
+    private void OnSaveClick(object sender, RoutedEventArgs e) => Save();
+
+    private void OnSaveAsClick(object sender, RoutedEventArgs e) => SaveAs();
+
+    /// <summary>保存できたら true。キャンセルや失敗なら false。</summary>
+    private bool Save()
+    {
+        if (_document is null) return false;
+        if (_currentPath is null) return SaveAs();
+
+        try
+        {
+            ProjectFile.Save(_document, _currentPath);
+            _isDirty = false;
+            UpdateTitle();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("保存できませんでした。", ex);
+            return false;
+        }
+    }
+
+    private bool SaveAs()
+    {
+        if (_document is null) return false;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "名前を付けて保存",
+            Filter = ProjectFile.FileFilter,
+            DefaultExt = ProjectFile.Extension,
+            AddExtension = true,
+            FileName = Path.GetFileName(_currentPath) ?? $"untitled{ProjectFile.Extension}"
+        };
+
+        if (dialog.ShowDialog(this) != true) return false;
+
+        _currentPath = dialog.FileName;
+        return Save();
+    }
+
+    private void OnExportPngClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null) return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "PNGで書き出し",
+            Filter = ImageFile.PngFilter,
+            DefaultExt = ".png",
+            AddExtension = true,
+            FileName = Path.GetFileNameWithoutExtension(_currentPath) is { Length: > 0 } name
+                ? name + ".png"
+                : "untitled.png"
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            ImageFile.ExportPng(_document, dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            ShowError("書き出せませんでした。", ex);
+        }
+    }
+
+    /// <summary>変更を破棄してよいか確認する。続行してよければ true。</summary>
+    private bool ConfirmDiscardChanges()
+    {
+        if (_document is null || !_isDirty) return true;
+
+        var result = MessageBox.Show(
+            this,
+            "変更が保存されていません。保存しますか？",
+            "AINE Paint",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+
+        return result switch
+        {
+            MessageBoxResult.Yes => Save(),
+            MessageBoxResult.No => true,
+            _ => false
+        };
+    }
+
+    private void OnWindowClosing(object sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (!ConfirmDiscardChanges())
+            e.Cancel = true;
+    }
+
+    private void MarkDirty()
+    {
+        if (_isDirty) return;
+        _isDirty = true;
+        UpdateTitle();
+    }
+
+    private void UpdateTitle()
+    {
+        string name = _currentPath is null ? "無題" : Path.GetFileName(_currentPath);
+        Title = _document is null
+            ? "AINE Paint"
+            : $"{(_isDirty ? "*" : "")}{name} — AINE Paint";
+    }
+
+    private void ShowError(string message, Exception ex)
+    {
+        MessageBox.Show(this, $"{message}\n\n{ex.Message}", "AINE Paint",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Close();
@@ -126,6 +295,7 @@ public partial class MainWindow : Window
     {
         if (_document?.ActiveLayer is not { } layer) return;
         _history.CapturePixels(_document, layer, rect, "ブラシ");
+        MarkDirty();
     }
 
     private void OnUndoClick(object sender, RoutedEventArgs e) => PerformUndo();
@@ -135,6 +305,7 @@ public partial class MainWindow : Window
     {
         if (_document is null || !_history.CanUndo) return;
         _history.Undo(_document);
+        MarkDirty();
         RefreshLayerPanel();
         Canvas.InvalidateVisual();
     }
@@ -143,6 +314,7 @@ public partial class MainWindow : Window
     {
         if (_document is null || !_history.CanRedo) return;
         _history.Redo(_document);
+        MarkDirty();
         RefreshLayerPanel();
         Canvas.InvalidateVisual();
     }
@@ -161,6 +333,7 @@ public partial class MainWindow : Window
         if (_document is null) return;
         _history.CaptureStructure(_document, "レイヤーを追加");
         _document.AddLayer();
+        MarkDirty();
     }
 
     private void OnDuplicateLayerClick(object sender, RoutedEventArgs e)
@@ -168,6 +341,7 @@ public partial class MainWindow : Window
         if (_document is null) return;
         _history.CaptureStructure(_document, "レイヤーを複製");
         _document.DuplicateActiveLayer();
+        MarkDirty();
     }
 
     private void OnDeleteLayerClick(object sender, RoutedEventArgs e)
@@ -184,6 +358,8 @@ public partial class MainWindow : Window
         _history.CaptureStructure(_document, "レイヤーを削除");
         if (!_document.RemoveActiveLayer())
             PerformUndo();   // 実際には消せなかったので記録を取り消す
+        else
+            MarkDirty();
     }
 
     private void OnMoveLayerUpClick(object sender, RoutedEventArgs e) => MoveActiveLayer(1);
@@ -196,6 +372,8 @@ public partial class MainWindow : Window
         _history.CaptureStructure(_document, "レイヤーの並び替え");
         if (!_document.MoveActiveLayer(offset))
             PerformUndo();
+        else
+            MarkDirty();
     }
 
     private void OnLayerSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -216,6 +394,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
 
         layer.Name = dialog.Value;
+        MarkDirty();
         RefreshLayerPanel();
     }
 
@@ -226,6 +405,7 @@ public partial class MainWindow : Window
 
         if (_syncingLayers || _document?.ActiveLayer is not { } layer) return;
         layer.Opacity = (float)(e.NewValue / 100.0);
+        MarkDirty();
     }
 
     private void RefreshLayerPanel()
@@ -336,6 +516,18 @@ public partial class MainWindow : Window
                     return;
                 case Key.N:
                     CreateNewCanvas();
+                    e.Handled = true;
+                    return;
+                case Key.O:
+                    OnOpenClick(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    return;
+                case Key.S:
+                    if (shift) SaveAs(); else Save();
+                    e.Handled = true;
+                    return;
+                case Key.E:
+                    OnExportPngClick(this, new RoutedEventArgs());
                     e.Handled = true;
                     return;
                 case Key.OemPlus:

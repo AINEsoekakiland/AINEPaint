@@ -8,7 +8,8 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BackgroundBrush}"
         UseLayoutRounding="True"
-        TextElement.Foreground="{StaticResource ForegroundBrush}">
+        TextElement.Foreground="{StaticResource ForegroundBrush}"
+        Closing="OnWindowClosing">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -20,11 +21,12 @@
         <!-- ===== メニュー ===== -->
         <Menu Grid.Row="0" Padding="4,2">
             <MenuItem Header="ファイル(_F)">
-                <MenuItem Header="新規キャンバス..." InputGestureText="Ctrl+N" Click="OnNewCanvasClick" />
-                <MenuItem Header="開く..."           IsEnabled="False" />
+                <MenuItem Header="新規キャンバス..."   InputGestureText="Ctrl+N"       Click="OnNewCanvasClick" />
+                <MenuItem Header="開く..."             InputGestureText="Ctrl+O"       Click="OnOpenClick" />
                 <Separator />
-                <MenuItem Header="保存"              IsEnabled="False" />
-                <MenuItem Header="PNGで書き出し..."  IsEnabled="False" />
+                <MenuItem Header="保存"                InputGestureText="Ctrl+S"       Click="OnSaveClick" />
+                <MenuItem Header="名前を付けて保存..." InputGestureText="Ctrl+Shift+S" Click="OnSaveAsClick" />
+                <MenuItem Header="PNGで書き出し..."    InputGestureText="Ctrl+E"       Click="OnExportPngClick" />
                 <Separator />
                 <MenuItem Header="終了" Click="OnExitClick" />
             </MenuItem>

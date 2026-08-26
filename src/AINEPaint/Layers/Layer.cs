@@ -51,6 +51,21 @@ public sealed class Layer : IDisposable, INotifyPropertyChanged
 
     public long ApproximateBytes => (long)Bitmap.Width * Bitmap.Height * 4;
 
+    /// <summary>
+    /// 既存の画像からレイヤーを作る。
+    /// キャンバスより小さい画像は左上に配置し、残りは透明のままにする。
+    /// </summary>
+    public static Layer FromBitmap(SKBitmap source, int width, int height, string name)
+    {
+        var layer = new Layer(width, height, name);
+
+        using var canvas = new SKCanvas(layer.Bitmap);
+        using var paint = new SKPaint { BlendMode = SKBlendMode.Src, FilterQuality = SKFilterQuality.None };
+        canvas.DrawBitmap(source, 0, 0, paint);
+
+        return layer;
+    }
+
     /// <summary>同じ内容の新しいレイヤーを作る。</summary>
     public Layer Duplicate(string name)
     {

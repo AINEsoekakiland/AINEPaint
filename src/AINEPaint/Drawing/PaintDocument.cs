@@ -29,6 +29,11 @@ public sealed class PaintDocument : IDisposable
     private int _activeLayerIndex;
 
     public PaintDocument(int width, int height, CanvasBackground background)
+        : this(width, height, background, createInitialLayer: true)
+    {
+    }
+
+    private PaintDocument(int width, int height, CanvasBackground background, bool createInitialLayer)
     {
         if (width < MinSide || width > MaxSide)
             throw new ArgumentOutOfRangeException(nameof(width));
@@ -39,8 +44,29 @@ public sealed class PaintDocument : IDisposable
         Height = height;
         Background = background;
 
-        AddLayerInternal(new Layer(width, height, "レイヤー 1"), 0);
+        if (createInitialLayer)
+            AddLayerInternal(new Layer(width, height, "レイヤー 1"), 0);
+
         _activeLayerIndex = 0;
+    }
+
+    /// <summary>
+    /// 読み込んだレイヤーからドキュメントを作る。ファイル読み込み専用。
+    /// レイヤーは下から順に渡すこと。
+    /// </summary>
+    public static PaintDocument FromLayers(int width, int height, CanvasBackground background,
+                                           IEnumerable<Layer> layers, int activeIndex)
+    {
+        var document = new PaintDocument(width, height, background, createInitialLayer: false);
+
+        foreach (var layer in layers)
+            document.AddLayerInternal(layer, document._layers.Count);
+
+        if (document._layers.Count == 0)
+            document.AddLayerInternal(new Layer(width, height, "レイヤー 1"), 0);
+
+        document._activeLayerIndex = Math.Clamp(activeIndex, 0, document._layers.Count - 1);
+        return document;
     }
 
     public int Width { get; }
