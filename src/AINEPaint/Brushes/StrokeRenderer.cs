@@ -26,6 +26,7 @@ public sealed class StrokeRenderer : IDisposable
     private SKBitmap? _target;
     private SKPaint? _paint;
     private BrushSettings? _settings;
+    private SKPath? _clip;
 
     private StrokePoint _previous;
     private SKPoint _lastMid;
@@ -43,9 +44,12 @@ public sealed class StrokeRenderer : IDisposable
     /// <summary>今回のストロークで書き換わった範囲（ドキュメント座標）。</summary>
     public SKRect DirtyRect { get; private set; } = SKRect.Empty;
 
-    public void Begin(SKBitmap target, BrushSettings settings, StrokePoint start)
+    public void Begin(SKBitmap target, BrushSettings settings, StrokePoint start, SKPath? clip = null)
     {
         Cancel();
+
+        // 選択範囲があるときは、合成時にその中だけへ書き込む
+        _clip = clip;
 
         EnsureBuffer(target.Width, target.Height);
         if (_bufferCanvas is null) return;
@@ -119,6 +123,8 @@ public sealed class StrokeRenderer : IDisposable
             using var composite = CreateCompositePaint(_settings);
             canvas.Save();
             canvas.ClipRect(dirty);
+            if (_clip is not null)
+                canvas.ClipPath(_clip, SKClipOperation.Intersect, antialias: true);
             canvas.DrawBitmap(_buffer, 0, 0, composite);
             canvas.Restore();
         }
@@ -136,6 +142,7 @@ public sealed class StrokeRenderer : IDisposable
         _paint = null;
         _settings = null;
         _target = null;
+        _clip = null;
     }
 
     /// <summary>プレビュー表示用。CanvasView が使う。</summary>

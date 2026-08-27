@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using AINEPaint.Brushes;
+using AINEPaint.Selection;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
 using SkiaSharp.Views.WPF;
@@ -25,6 +27,14 @@ public class CanvasView : SKElement
     private readonly StrokeRenderer _stroke = new();
     private bool _isDrawing;
 
+    private SKPath? _selectionPreview;
+    private SKPoint _selectionStart;
+    private bool _isSelecting;
+
+    /// <summary>選択の縁の破線を流すためのタイマー。選択が無いときは止めておく。</summary>
+    private readonly DispatcherTimer _antsTimer = new() { Interval = TimeSpan.FromMilliseconds(90) };
+    private float _antsPhase;
+
     public Viewport Viewport { get; } = new();
 
     /// <summary>下部バーの設定と共有する。UI 側が値を書き換えれば次のストロークから反映される。</summary>
@@ -41,6 +51,12 @@ public class CanvasView : SKElement
 
     /// <summary>塗りつぶしが選択されている間 true。左クリックで塗る。</summary>
     public bool FillToolActive { get; set; }
+
+    /// <summary>選択ツールの種類。None のときは選択操作をしない。</summary>
+    public SelectionTool SelectionMode { get; set; } = SelectionTool.None;
+
+    /// <summary>現在の選択範囲。</summary>
+    public SelectionRegion Selection { get; } = new();
 
     /// <summary>表示状態（倍率・サイズ）が変わったときに発火。ステータスバー更新用。</summary>
     public event Action? ViewStateChanged;
@@ -65,6 +81,18 @@ public class CanvasView : SKElement
         {
             InvalidateVisual();
             ViewStateChanged?.Invoke();
+        };
+
+        Selection.Changed += () =>
+        {
+            InvalidateVisual();
+            UpdateAntsTimer();
+        };
+
+        _antsTimer.Tick += (_, _) =>
+        {
+            _antsPhase = (_antsPhase + 1.5f) % 10f;
+            InvalidateVisual();
         };
     }
 
@@ -160,7 +188,7 @@ public class CanvasView : SKElement
 
             canvas.Save();
             canvas.SetMatrix(matrix);
-            _document.Render(canvas, preview, previewPaint, quality);
+            _document.Render(canvas, preview, previewPaint, quality, Selection.Path);
             canvas.Restore();
         }
 
@@ -172,6 +200,25 @@ public class CanvasView : SKElement
             IsAntialias = false
         };
         canvas.DrawRect(screenRect, border);
+
+        // 選択範囲の縁は画面座標で描く（拡大しても線の太さを保つため）
+        Selection.DrawOutline(canvas, matrix, _antsPhase);
+
+        if (_selectionPreview is not null)
+        {
+            using var preview = new SKPath(_selectionPreview);
+            preview.Transform(matrix);
+            SelectionRegion.DrawMarchingAnts(canvas, preview, _antsPhase);
+        }
+    }
+
+    /// <summary>選択がある間だけ破線を動かす。無いときに回し続けても無駄なので止める。</summary>
+    private void UpdateAntsTimer()
+    {
+        bool wanted = Selection.IsActive || _isSelecting;
+
+        if (wanted && !_antsTimer.IsEnabled) _antsTimer.Start();
+        else if (!wanted && _antsTimer.IsEnabled) _antsTimer.Stop();
     }
 
     private static SKBitmap CreateCheckerTile()
@@ -233,13 +280,20 @@ public class CanvasView : SKElement
             return;
         }
 
+        if (e.ChangedButton == MouseButton.Left && SelectionMode != SelectionTool.None)
+        {
+            BeginSelection(e);
+            e.Handled = true;
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left)
         {
             // 非表示のレイヤーには描かない（描いても見えず、事故のもとになる）
             if (_document.ActiveLayer is not { IsVisible: true } target) return;
 
             _isDrawing = true;
-            _stroke.Begin(target.Bitmap, Brush, ToStrokePoint(e));
+            _stroke.Begin(target.Bitmap, Brush, ToStrokePoint(e), Selection.Path);
             CaptureMouse();
             InvalidateVisual();
             e.Handled = true;
@@ -260,6 +314,12 @@ public class CanvasView : SKElement
             return;
         }
 
+        if (_isSelecting && e.LeftButton == MouseButtonState.Pressed)
+        {
+            UpdateSelection(e);
+            return;
+        }
+
         if (_isDrawing && e.LeftButton == MouseButtonState.Pressed)
         {
             _stroke.AddPoint(ToStrokePoint(e), Brush);
@@ -275,6 +335,13 @@ public class CanvasView : SKElement
         {
             _isPanning = false;
             Cursor = _document is null ? Cursors.Arrow : Cursors.Cross;
+            ReleaseMouseCapture();
+            return;
+        }
+
+        if (_isSelecting && e.ChangedButton == MouseButton.Left)
+        {
+            CommitSelection();
             ReleaseMouseCapture();
             return;
         }
@@ -308,6 +375,77 @@ public class CanvasView : SKElement
         StrokeCompleted?.Invoke(dirty);
     }
 
+    // ===== 選択範囲 =====
+
+    private SKPoint DocumentPointOf(MouseEventArgs e)
+    {
+        var p = e.GetPosition(this);
+        float s = DpiScale;
+        return Viewport.ToDocument((float)p.X * s, (float)p.Y * s);
+    }
+
+    private void BeginSelection(MouseEventArgs e)
+    {
+        if (_document is null) return;
+
+        _isSelecting = true;
+        _selectionStart = DocumentPointOf(e);
+
+        _selectionPreview?.Dispose();
+        _selectionPreview = new SKPath();
+
+        if (SelectionMode == SelectionTool.Lasso)
+            _selectionPreview.MoveTo(_selectionStart);
+
+        CaptureMouse();
+        UpdateAntsTimer();
+        InvalidateVisual();
+    }
+
+    private void UpdateSelection(MouseEventArgs e)
+    {
+        if (_selectionPreview is null) return;
+
+        var point = DocumentPointOf(e);
+
+        if (SelectionMode == SelectionTool.Rectangle)
+        {
+            _selectionPreview.Reset();
+            _selectionPreview.AddRect(SKRect.Create(
+                Math.Min(_selectionStart.X, point.X),
+                Math.Min(_selectionStart.Y, point.Y),
+                Math.Abs(point.X - _selectionStart.X),
+                Math.Abs(point.Y - _selectionStart.Y)));
+        }
+        else
+        {
+            _selectionPreview.LineTo(point);
+        }
+
+        InvalidateVisual();
+    }
+
+    private void CommitSelection()
+    {
+        _isSelecting = false;
+
+        if (_selectionPreview is not null)
+        {
+            if (_selectionPreview.Bounds.Width < 1f || _selectionPreview.Bounds.Height < 1f)
+                Selection.Clear();   // ただのクリックは選択解除として扱う
+            else if (SelectionMode == SelectionTool.Rectangle)
+                Selection.SetRectangle(_selectionPreview.Bounds);
+            else
+                Selection.SetPath(_selectionPreview);
+
+            _selectionPreview.Dispose();
+            _selectionPreview = null;
+        }
+
+        UpdateAntsTimer();
+        InvalidateVisual();
+    }
+
     /// <summary>
     /// クリック位置から塗りつぶす。
     /// 塗る範囲を先に求めてから履歴に記録し、そのあとで適用する。
@@ -334,7 +472,7 @@ public class CanvasView : SKElement
             var bounds = new SKRect(mask.Bounds.Left, mask.Bounds.Top, mask.Bounds.Right, mask.Bounds.Bottom);
             BeforeDocumentChange?.Invoke(bounds);
 
-            FloodFill.Apply(target.Bitmap, mask, Brush.Color);
+            FloodFill.Apply(target.Bitmap, mask, Brush.Color, Selection.Path);
 
             InvalidateVisual();
             StrokeCompleted?.Invoke(bounds);

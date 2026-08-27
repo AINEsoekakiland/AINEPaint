@@ -196,7 +196,7 @@ public sealed class PaintDocument : IDisposable
     /// activeOverlay を渡すと、選択中レイヤーの上に重ねて合成する（描画中のプレビュー用）。
     /// </summary>
     public void Render(SKCanvas canvas, SKBitmap? activeOverlay = null, SKPaint? overlayPaint = null,
-                       SKFilterQuality quality = SKFilterQuality.None)
+                       SKFilterQuality quality = SKFilterQuality.None, SKPath? overlayClip = null)
     {
         foreach (var layer in _layers)
         {
@@ -222,7 +222,18 @@ public sealed class PaintDocument : IDisposable
             canvas.SaveLayer(layerPaint);
             using (var full = new SKPaint { FilterQuality = quality })
                 canvas.DrawBitmap(layer.Bitmap, 0, 0, full);
-            canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
+            if (overlayClip is not null)
+            {
+                canvas.Save();
+                canvas.ClipPath(overlayClip, SKClipOperation.Intersect, antialias: true);
+                canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
+                canvas.Restore();
+            }
+            else
+            {
+                canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
+            }
+
             canvas.Restore();
         }
     }

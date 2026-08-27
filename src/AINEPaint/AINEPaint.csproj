@@ -20,4 +20,9 @@
     <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- ツールアイコン。exe に埋め込むので配布時に別ファイルにならない。 -->
+    <Resource Include="Assets\Icons\*.png" />
+  </ItemGroup>
+
 </Project>

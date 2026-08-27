@@ -11,6 +11,15 @@
         TextElement.Foreground="{StaticResource ForegroundBrush}"
         Closing="OnWindowClosing">
 
+    <Window.Resources>
+        <Image x:Key="Icon_pen"        Source="/Assets/Icons/pen.png"        Width="30" Height="30" />
+        <Image x:Key="Icon_pencil"     Source="/Assets/Icons/pencil.png"     Width="30" Height="30" />
+        <Image x:Key="Icon_eraser"     Source="/Assets/Icons/eraser.png"     Width="30" Height="30" />
+        <Image x:Key="Icon_fill"       Source="/Assets/Icons/fill.png"       Width="30" Height="30" />
+        <Image x:Key="Icon_move"       Source="/Assets/Icons/move.png"       Width="30" Height="30" />
+        <Image x:Key="Icon_eyedropper" Source="/Assets/Icons/eyedropper.png" Width="30" Height="30" />
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -35,6 +44,9 @@
                           IsEnabled="False" Click="OnUndoClick" />
                 <MenuItem x:Name="RedoMenuItem" Header="やり直し" InputGestureText="Ctrl+Shift+Z"
                           IsEnabled="False" Click="OnRedoClick" />
+                <Separator />
+                <MenuItem Header="すべて選択" InputGestureText="Ctrl+A" Click="OnSelectAllClick" />
+                <MenuItem Header="選択を解除" InputGestureText="Ctrl+D" Click="OnDeselectClick" />
             </MenuItem>
             <MenuItem Header="表示(_V)">
                 <MenuItem Header="ズームイン"   InputGestureText="Ctrl++" Click="OnZoomInClick" />
@@ -57,22 +69,34 @@
                     BorderThickness="0,0,1,0">
                 <StackPanel x:Name="ToolPanel" Margin="0,8">
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="🖊" Tag="Pen" IsChecked="True" Checked="OnToolChecked"
+                                 Tag="Pen" IsChecked="True" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_pen}"
                                  ToolTip="ペン (P)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="✏" Tag="Pencil" Checked="OnToolChecked"
+                                 Tag="Pencil" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_pencil}"
                                  ToolTip="鉛筆 (N)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="🧽" Tag="Eraser" Checked="OnToolChecked"
+                                 Tag="Eraser" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_eraser}"
                                  ToolTip="消しゴム (E)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="🪣" Tag="Fill" Checked="OnToolChecked"
+                                 Tag="Fill" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_fill}"
                                  ToolTip="塗りつぶし (G)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="🖐" Tag="Pan" Checked="OnToolChecked"
+                                 Content="▭" Tag="SelectRect" Checked="OnToolChecked"
+                                 ToolTip="長方形で選択 (M)" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
+                                 Content="◌" Tag="SelectLasso" Checked="OnToolChecked"
+                                 ToolTip="なげなわで選択 (L)" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
+                                 Tag="Pan" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_move}"
                                  ToolTip="移動 (H) ／ スペース+ドラッグ・中ボタンドラッグでも可" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="💧" Tag="Picker" Checked="OnToolChecked"
+                                 Tag="Picker" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_eyedropper}"
                                  ToolTip="スポイト (I)" />
                 </StackPanel>
             </Border>

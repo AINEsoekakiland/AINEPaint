@@ -105,11 +105,16 @@ public static class FloodFill
     }
 
     /// <summary>求めた形を実際に塗る。</summary>
-    public static void Apply(SKBitmap target, FillMask mask, SKColor color)
+    public static void Apply(SKBitmap target, FillMask mask, SKColor color, SKPath? clip = null)
     {
         using var canvas = new SKCanvas(target);
         using var paint = new SKPaint { Color = color, IsAntialias = false };
+
+        canvas.Save();
+        if (clip is not null)
+            canvas.ClipPath(clip, SKClipOperation.Intersect, antialias: true);
         canvas.DrawImage(mask.Image, 0, 0, paint);
+        canvas.Restore();
     }
 
     private static void PushRow(Stack<(int, int)> stack, ReadOnlySpan<uint> pixels, byte[] mask,

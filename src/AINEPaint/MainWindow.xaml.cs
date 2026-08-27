@@ -10,6 +10,7 @@ using AINEPaint.Drawing;
 using AINEPaint.History;
 using AINEPaint.IO;
 using AINEPaint.Layers;
+using AINEPaint.Selection;
 using AINEPaint.Views;
 using Microsoft.Win32;
 using SkiaSharp;
@@ -77,6 +78,7 @@ public partial class MainWindow : Window
         document.StructureChanged += RefreshLayerPanel;
 
         Canvas.Document = document;
+        Canvas.Selection.Clear();
         EmptyHint.Visibility = Visibility.Collapsed;
 
         _currentPath = path;
@@ -260,6 +262,12 @@ public partial class MainWindow : Window
         Canvas.PanToolActive = tag == "Pan";
         Canvas.EyedropperActive = tag == "Picker";
         Canvas.FillToolActive = tag == "Fill";
+        Canvas.SelectionMode = tag switch
+        {
+            "SelectRect" => SelectionTool.Rectangle,
+            "SelectLasso" => SelectionTool.Lasso,
+            _ => SelectionTool.None
+        };
 
         if (BrushOptions is not null && FillOptions is not null)
         {
@@ -333,6 +341,16 @@ public partial class MainWindow : Window
         UndoMenuItem.IsEnabled = _history.CanUndo;
         RedoMenuItem.IsEnabled = _history.CanRedo;
     }
+
+    // ===== 選択範囲 =====
+
+    private void OnSelectAllClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null) return;
+        Canvas.Selection.SelectAll(_document.Width, _document.Height);
+    }
+
+    private void OnDeselectClick(object sender, RoutedEventArgs e) => Canvas.Selection.Clear();
 
     // ===== レイヤー =====
 
@@ -554,6 +572,14 @@ public partial class MainWindow : Window
                     OnExportPngClick(this, new RoutedEventArgs());
                     e.Handled = true;
                     return;
+                case Key.A:
+                    OnSelectAllClick(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    return;
+                case Key.D:
+                    OnDeselectClick(this, new RoutedEventArgs());
+                    e.Handled = true;
+                    return;
                 case Key.OemPlus:
                 case Key.Add:
                     Canvas.ZoomByStep(1.25f);
@@ -581,6 +607,8 @@ public partial class MainWindow : Window
             case Key.H: SelectTool("Pan"); e.Handled = true; return;
             case Key.I: SelectTool("Picker"); e.Handled = true; return;
             case Key.G: SelectTool("Fill"); e.Handled = true; return;
+            case Key.M: SelectTool("SelectRect"); e.Handled = true; return;
+            case Key.L: SelectTool("SelectLasso"); e.Handled = true; return;
 
             case Key.OemOpenBrackets:
                 NudgeBrushSize(-Math.Max(1, SizeSlider.Value * 0.1));
