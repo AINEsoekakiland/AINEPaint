@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using AINEPaint.Layers;
+using AINEPaint.Selection;
 using SkiaSharp;
 
 namespace AINEPaint.Drawing;
@@ -196,13 +197,15 @@ public sealed class PaintDocument : IDisposable
     /// activeOverlay を渡すと、選択中レイヤーの上に重ねて合成する（描画中のプレビュー用）。
     /// </summary>
     public void Render(SKCanvas canvas, SKBitmap? activeOverlay = null, SKPaint? overlayPaint = null,
-                       SKFilterQuality quality = SKFilterQuality.None, SKPath? overlayClip = null)
+                       SKFilterQuality quality = SKFilterQuality.None, SKPath? overlayClip = null,
+                       FloatingSelection? floating = null)
     {
         foreach (var layer in _layers)
         {
             if (!layer.IsVisible || layer.AlphaByte == 0) continue;
 
-            bool withOverlay = activeOverlay is not null && ReferenceEquals(layer, ActiveLayer);
+            bool isActive = ReferenceEquals(layer, ActiveLayer);
+            bool withOverlay = isActive && (activeOverlay is not null || floating is not null);
 
             using var layerPaint = new SKPaint
             {
@@ -222,16 +225,22 @@ public sealed class PaintDocument : IDisposable
             canvas.SaveLayer(layerPaint);
             using (var full = new SKPaint { FilterQuality = quality })
                 canvas.DrawBitmap(layer.Bitmap, 0, 0, full);
-            if (overlayClip is not null)
+            // 変形中の選択部分は、元の位置に穴を開けてから変形後を描く
+            floating?.DrawInto(canvas);
+
+            if (activeOverlay is not null)
             {
-                canvas.Save();
-                canvas.ClipPath(overlayClip, SKClipOperation.Intersect, antialias: true);
-                canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
-                canvas.Restore();
-            }
-            else
-            {
-                canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
+                if (overlayClip is not null)
+                {
+                    canvas.Save();
+                    canvas.ClipPath(overlayClip, SKClipOperation.Intersect, antialias: true);
+                    canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
+                    canvas.Restore();
+                }
+                else
+                {
+                    canvas.DrawBitmap(activeOverlay, 0, 0, overlayPaint);
+                }
             }
 
             canvas.Restore();

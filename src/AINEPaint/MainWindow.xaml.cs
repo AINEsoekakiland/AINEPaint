@@ -69,6 +69,8 @@ public partial class MainWindow : Window
     /// <summary>ドキュメントを差し替える。履歴・レイヤー一覧・タイトルもここで揃える。</summary>
     private void SetDocument(PaintDocument document, string? path)
     {
+        Canvas.CancelTransform();
+
         _document?.Dispose();
         _document = document;
 
@@ -128,6 +130,7 @@ public partial class MainWindow : Window
     /// <summary>保存できたら true。キャンセルや失敗なら false。</summary>
     private bool Save()
     {
+        if (Canvas.IsTransforming) Canvas.CommitTransform();
         if (_document is null) return false;
         if (_currentPath is null) return SaveAs();
 
@@ -259,6 +262,11 @@ public partial class MainWindow : Window
         // Canvas は InitializeComponent 中の IsChecked 設定でも呼ばれ得るので防御する
         if (Canvas is null) return;
 
+        // 別のツールへ移るときは、変形中なら確定してから移る
+        if (tag != "Transform" && Canvas.IsTransforming)
+            Canvas.CommitTransform();
+
+        Canvas.TransformToolActive = tag == "Transform";
         Canvas.PanToolActive = tag == "Pan";
         Canvas.EyedropperActive = tag == "Picker";
         Canvas.FillToolActive = tag == "Fill";
@@ -274,6 +282,20 @@ public partial class MainWindow : Window
             bool isFill = tag == "Fill";
             BrushOptions.Visibility = isFill ? Visibility.Collapsed : Visibility.Visible;
             FillOptions.Visibility = isFill ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (tag == "Transform")
+        {
+            if (!Canvas.Selection.IsActive)
+            {
+                MessageBox.Show(this,
+                    "先に選択ツール（長方形 M / なげなわ L）で範囲を選んでください。",
+                    "AINE Paint", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                Canvas.BeginTransform();
+            }
         }
 
         switch (tag)
@@ -350,7 +372,11 @@ public partial class MainWindow : Window
         Canvas.Selection.SelectAll(_document.Width, _document.Height);
     }
 
-    private void OnDeselectClick(object sender, RoutedEventArgs e) => Canvas.Selection.Clear();
+    private void OnDeselectClick(object sender, RoutedEventArgs e)
+    {
+        if (Canvas.IsTransforming) Canvas.CommitTransform();
+        Canvas.Selection.Clear();
+    }
 
     // ===== レイヤー =====
 
@@ -617,6 +643,16 @@ public partial class MainWindow : Window
             case Key.OemCloseBrackets:
                 NudgeBrushSize(Math.Max(1, SizeSlider.Value * 0.1));
                 e.Handled = true;
+                return;
+
+            case Key.T: SelectTool("Transform"); e.Handled = true; return;
+
+            case Key.Enter:
+                if (Canvas.IsTransforming) { Canvas.CommitTransform(); e.Handled = true; }
+                return;
+
+            case Key.Escape:
+                if (Canvas.IsTransforming) { Canvas.CancelTransform(); e.Handled = true; }
                 return;
 
             case Key.Space:

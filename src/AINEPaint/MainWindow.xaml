@@ -12,14 +12,14 @@
         Closing="OnWindowClosing">
 
     <Window.Resources>
-        <Image x:Key="Icon_pen"        Source="/Assets/Icons/pen.png"        Width="30" Height="30" />
-        <Image x:Key="Icon_pencil"     Source="/Assets/Icons/pencil.png"     Width="30" Height="30" />
-        <Image x:Key="Icon_eraser"     Source="/Assets/Icons/eraser.png"     Width="30" Height="30" />
-        <Image x:Key="Icon_fill"       Source="/Assets/Icons/fill.png"       Width="30" Height="30" />
-        <Image x:Key="Icon_move"       Source="/Assets/Icons/move.png"       Width="30" Height="30" />
-        <Image x:Key="Icon_eyedropper" Source="/Assets/Icons/eyedropper.png" Width="30" Height="30" />
-        <Image x:Key="Icon_selectrect"  Source="/Assets/Icons/select-rect.png"  Width="30" Height="30" />
-        <Image x:Key="Icon_selectlasso" Source="/Assets/Icons/select-lasso.png" Width="30" Height="30" />
+        <Image x:Key="Icon_pen"        Source="/Assets/Icons/pen.png"        Width="28" Height="28" />
+        <Image x:Key="Icon_pencil"     Source="/Assets/Icons/pencil.png"     Width="28" Height="28" />
+        <Image x:Key="Icon_eraser"     Source="/Assets/Icons/eraser.png"     Width="28" Height="28" />
+        <Image x:Key="Icon_fill"       Source="/Assets/Icons/fill.png"       Width="28" Height="28" />
+        <Image x:Key="Icon_move"       Source="/Assets/Icons/move.png"       Width="28" Height="28" />
+        <Image x:Key="Icon_eyedropper" Source="/Assets/Icons/eyedropper.png" Width="28" Height="28" />
+        <Image x:Key="Icon_selectrect"  Source="/Assets/Icons/select-rect.png"  Width="28" Height="28" />
+        <Image x:Key="Icon_selectlasso" Source="/Assets/Icons/select-lasso.png" Width="28" Height="28" />
     </Window.Resources>
 
     <Grid>
@@ -60,7 +60,7 @@
         <!-- ===== 本体 ===== -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="76" />
+                <ColumnDefinition Width="70" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="220" />
             </Grid.ColumnDefinitions>
@@ -69,6 +69,7 @@
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrush2}"
                     BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="ToolPanel" Margin="0,8">
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="Pen" IsChecked="True" Checked="OnToolChecked"
@@ -95,14 +96,18 @@
                                  Content="{StaticResource Icon_selectlasso}"
                                  ToolTip="なげなわで選択 (L)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Tag="Pan" Checked="OnToolChecked"
+                                 Tag="Transform" Checked="OnToolChecked"
                                  Content="{StaticResource Icon_move}"
+                                 ToolTip="選択範囲を移動・拡大縮小・回転 (T)" />
+                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
+                                 Content="🖐" Tag="Pan" Checked="OnToolChecked"
                                  ToolTip="移動 (H) ／ スペース+ドラッグ・中ボタンドラッグでも可" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="Picker" Checked="OnToolChecked"
                                  Content="{StaticResource Icon_eyedropper}"
                                  ToolTip="スポイト (I)" />
                 </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <Grid Grid.Column="1">

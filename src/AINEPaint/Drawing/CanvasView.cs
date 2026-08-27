@@ -31,6 +31,16 @@ public class CanvasView : SKElement
     private SKPoint _selectionStart;
     private bool _isSelecting;
 
+    private FloatingSelection? _floating;
+    private TransformGrip _grip = TransformGrip.None;
+    private SKPoint _gripStartDoc;
+    private float _gripStartScale;
+    private float _gripStartRotation;
+    private float _gripStartOffsetX;
+    private float _gripStartOffsetY;
+    private float _gripStartDistance;
+    private float _gripStartAngle;
+
     /// <summary>選択の縁の破線を流すためのタイマー。選択が無いときは止めておく。</summary>
     private readonly DispatcherTimer _antsTimer = new() { Interval = TimeSpan.FromMilliseconds(90) };
     private float _antsPhase;
@@ -57,6 +67,12 @@ public class CanvasView : SKElement
 
     /// <summary>現在の選択範囲。</summary>
     public SelectionRegion Selection { get; } = new();
+
+    /// <summary>変形ツールが選択されている間 true。</summary>
+    public bool TransformToolActive { get; set; }
+
+    /// <summary>変形中かどうか。</summary>
+    public bool IsTransforming => _floating is not null;
 
     /// <summary>表示状態（倍率・サイズ）が変わったときに発火。ステータスバー更新用。</summary>
     public event Action? ViewStateChanged;
@@ -188,7 +204,7 @@ public class CanvasView : SKElement
 
             canvas.Save();
             canvas.SetMatrix(matrix);
-            _document.Render(canvas, preview, previewPaint, quality, Selection.Path);
+            _document.Render(canvas, preview, previewPaint, quality, Selection.Path, _floating);
             canvas.Restore();
         }
 
@@ -210,6 +226,78 @@ public class CanvasView : SKElement
             preview.Transform(matrix);
             SelectionRegion.DrawMarchingAnts(canvas, preview, _antsPhase);
         }
+
+        if (_floating is not null)
+            DrawTransformHandles(canvas, matrix);
+    }
+
+    /// <summary>変形中の枠とハンドル。すべて画面座標で描くので、拡大しても大きさが変わらない。</summary>
+    private void DrawTransformHandles(SKCanvas canvas, SKMatrix viewMatrix)
+    {
+        if (_floating is null) return;
+
+        var corners = _floating.Corners;
+        var screen = new SKPoint[corners.Length];
+        for (int i = 0; i < corners.Length; i++)
+            screen[i] = viewMatrix.MapPoint(corners[i]);
+
+        using var frame = new SKPath();
+        frame.MoveTo(screen[0]);
+        for (int i = 1; i < screen.Length; i++) frame.LineTo(screen[i]);
+        frame.Close();
+
+        using var line = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1.5f,
+            Color = new SKColor(0x4E, 0xA1, 0xFF),
+            IsAntialias = true
+        };
+        canvas.DrawPath(frame, line);
+
+        // 回転ハンドルは上辺の中央から少し離した位置に置く
+        var rotationHandle = RotationHandleScreenPoint(viewMatrix);
+        canvas.DrawLine((screen[0].X + screen[1].X) / 2f, (screen[0].Y + screen[1].Y) / 2f,
+                        rotationHandle.X, rotationHandle.Y, line);
+
+        using var fill = new SKPaint { Color = SKColors.White, IsAntialias = true };
+        using var edge = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f,
+            Color = new SKColor(0x4E, 0xA1, 0xFF), IsAntialias = true
+        };
+
+        foreach (var p in screen)
+        {
+            var box = new SKRect(p.X - HandleRadius, p.Y - HandleRadius,
+                                 p.X + HandleRadius, p.Y + HandleRadius);
+            canvas.DrawRect(box, fill);
+            canvas.DrawRect(box, edge);
+        }
+
+        canvas.DrawCircle(rotationHandle, HandleRadius, fill);
+        canvas.DrawCircle(rotationHandle, HandleRadius, edge);
+    }
+
+    private const float HandleRadius = 6f;
+    private const float RotationHandleDistance = 28f;
+
+    private SKPoint RotationHandleScreenPoint(SKMatrix viewMatrix)
+    {
+        var corners = _floating!.Corners;
+        var topLeft = viewMatrix.MapPoint(corners[0]);
+        var topRight = viewMatrix.MapPoint(corners[1]);
+        var center = viewMatrix.MapPoint(_floating.Center);
+
+        var mid = new SKPoint((topLeft.X + topRight.X) / 2f, (topLeft.Y + topRight.Y) / 2f);
+
+        float dx = mid.X - center.X;
+        float dy = mid.Y - center.Y;
+        float length = MathF.Sqrt(dx * dx + dy * dy);
+        if (length < 0.001f) return new SKPoint(mid.X, mid.Y - RotationHandleDistance);
+
+        return new SKPoint(mid.X + dx / length * RotationHandleDistance,
+                           mid.Y + dy / length * RotationHandleDistance);
     }
 
     /// <summary>選択がある間だけ破線を動かす。無いときに回し続けても無駄なので止める。</summary>
@@ -266,6 +354,26 @@ public class CanvasView : SKElement
             return;
         }
 
+        if (e.ChangedButton == MouseButton.Left && _floating is not null)
+        {
+            var screen = e.GetPosition(this);
+            float dpi = DpiScale;
+            var grip = HitTestGrip(new SKPoint((float)screen.X * dpi, (float)screen.Y * dpi));
+
+            if (grip != TransformGrip.None)
+            {
+                BeginGrip(grip, DocumentPointOf(e));
+                CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
+            // 枠の外を押したら確定する
+            CommitTransform();
+            e.Handled = true;
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left && EyedropperActive)
         {
             PickColorAt(e);
@@ -314,6 +422,12 @@ public class CanvasView : SKElement
             return;
         }
 
+        if (_grip != TransformGrip.None && e.LeftButton == MouseButtonState.Pressed)
+        {
+            UpdateGrip(DocumentPointOf(e));
+            return;
+        }
+
         if (_isSelecting && e.LeftButton == MouseButtonState.Pressed)
         {
             UpdateSelection(e);
@@ -335,6 +449,13 @@ public class CanvasView : SKElement
         {
             _isPanning = false;
             Cursor = _document is null ? Cursors.Arrow : Cursors.Cross;
+            ReleaseMouseCapture();
+            return;
+        }
+
+        if (_grip != TransformGrip.None && e.ChangedButton == MouseButton.Left)
+        {
+            _grip = TransformGrip.None;
             ReleaseMouseCapture();
             return;
         }
@@ -373,6 +494,137 @@ public class CanvasView : SKElement
         var dirty = _stroke.End();
         InvalidateVisual();
         StrokeCompleted?.Invoke(dirty);
+    }
+
+    // ===== 変形 =====
+
+    /// <summary>選択部分を切り出して浮かせる。元のレイヤーはまだ書き換えない。</summary>
+    public void BeginTransform()
+    {
+        if (_floating is not null) return;
+        if (_document?.ActiveLayer is not { IsVisible: true } layer) return;
+        if (Selection.Path is not { } path) return;
+
+        _floating = FloatingSelection.Lift(layer.Bitmap, path);
+        InvalidateVisual();
+    }
+
+    /// <summary>変形を確定してレイヤーへ書き込む。</summary>
+    public void CommitTransform()
+    {
+        if (_floating is null || _document?.ActiveLayer is not { } layer)
+        {
+            CancelTransform();
+            return;
+        }
+
+        var affected = _floating.AffectedBounds;
+        BeforeDocumentChange?.Invoke(affected);
+
+        // 表示に使っているのと同じ処理で書き込むので、見た目と結果が必ず一致する
+        using (var canvas = new SKCanvas(layer.Bitmap))
+            _floating.DrawInto(canvas);
+
+        using (var moved = _floating.CreateTransformedPath())
+            Selection.SetPath(moved);
+
+        _floating.Dispose();
+        _floating = null;
+        _grip = TransformGrip.None;
+
+        InvalidateVisual();
+        StrokeCompleted?.Invoke(affected);
+    }
+
+    /// <summary>変形を捨てる。元のレイヤーは触っていないので、捨てるだけで元に戻る。</summary>
+    public void CancelTransform()
+    {
+        if (_floating is null) return;
+
+        _floating.Dispose();
+        _floating = null;
+        _grip = TransformGrip.None;
+
+        InvalidateVisual();
+    }
+
+    private TransformGrip HitTestGrip(SKPoint screenPoint)
+    {
+        if (_floating is null) return TransformGrip.None;
+
+        var view = Viewport.Matrix;
+        float threshold = HandleRadius + 4f;
+
+        var rotation = RotationHandleScreenPoint(view);
+        if (Distance(screenPoint, rotation) <= threshold) return TransformGrip.Rotate;
+
+        foreach (var corner in _floating.Corners)
+            if (Distance(screenPoint, view.MapPoint(corner)) <= threshold)
+                return TransformGrip.Scale;
+
+        // 枠の内側なら移動
+        var corners = _floating.Corners;
+        using var frame = new SKPath();
+        frame.MoveTo(view.MapPoint(corners[0]));
+        for (int i = 1; i < corners.Length; i++) frame.LineTo(view.MapPoint(corners[i]));
+        frame.Close();
+
+        return frame.Contains(screenPoint.X, screenPoint.Y) ? TransformGrip.Move : TransformGrip.None;
+    }
+
+    private static float Distance(SKPoint a, SKPoint b)
+    {
+        float dx = a.X - b.X, dy = a.Y - b.Y;
+        return MathF.Sqrt(dx * dx + dy * dy);
+    }
+
+    private void BeginGrip(TransformGrip grip, SKPoint documentPoint)
+    {
+        if (_floating is null) return;
+
+        _grip = grip;
+        _gripStartDoc = documentPoint;
+        _gripStartScale = _floating.Scale;
+        _gripStartRotation = _floating.Rotation;
+        _gripStartOffsetX = _floating.OffsetX;
+        _gripStartOffsetY = _floating.OffsetY;
+
+        var center = _floating.Center;
+        _gripStartDistance = Math.Max(1f, Distance(documentPoint, center));
+        _gripStartAngle = MathF.Atan2(documentPoint.Y - center.Y, documentPoint.X - center.X);
+    }
+
+    private void UpdateGrip(SKPoint documentPoint)
+    {
+        if (_floating is null || _grip == TransformGrip.None) return;
+
+        switch (_grip)
+        {
+            case TransformGrip.Move:
+                _floating.OffsetX = _gripStartOffsetX + (documentPoint.X - _gripStartDoc.X);
+                _floating.OffsetY = _gripStartOffsetY + (documentPoint.Y - _gripStartDoc.Y);
+                break;
+
+            case TransformGrip.Scale:
+            {
+                var center = _floating.Center;
+                float distance = Distance(documentPoint, center);
+                float scale = _gripStartScale * (distance / _gripStartDistance);
+                _floating.Scale = Math.Clamp(scale, 0.05f, 20f);
+                break;
+            }
+
+            case TransformGrip.Rotate:
+            {
+                var center = _floating.Center;
+                float angle = MathF.Atan2(documentPoint.Y - center.Y, documentPoint.X - center.X);
+                float degrees = (angle - _gripStartAngle) * 180f / MathF.PI;
+                _floating.Rotation = _gripStartRotation + degrees;
+                break;
+            }
+        }
+
+        InvalidateVisual();
     }
 
     // ===== 選択範囲 =====
