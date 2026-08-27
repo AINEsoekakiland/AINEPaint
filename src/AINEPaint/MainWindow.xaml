@@ -18,6 +18,8 @@
         <Image x:Key="Icon_fill"       Source="/Assets/Icons/fill.png"       Width="30" Height="30" />
         <Image x:Key="Icon_move"       Source="/Assets/Icons/move.png"       Width="30" Height="30" />
         <Image x:Key="Icon_eyedropper" Source="/Assets/Icons/eyedropper.png" Width="30" Height="30" />
+        <Image x:Key="Icon_selectrect"  Source="/Assets/Icons/select-rect.png"  Width="30" Height="30" />
+        <Image x:Key="Icon_selectlasso" Source="/Assets/Icons/select-lasso.png" Width="30" Height="30" />
     </Window.Resources>
 
     <Grid>
@@ -85,10 +87,12 @@
                                  Content="{StaticResource Icon_fill}"
                                  ToolTip="塗りつぶし (G)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="▭" Tag="SelectRect" Checked="OnToolChecked"
+                                 Tag="SelectRect" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_selectrect}"
                                  ToolTip="長方形で選択 (M)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
-                                 Content="◌" Tag="SelectLasso" Checked="OnToolChecked"
+                                 Tag="SelectLasso" Checked="OnToolChecked"
+                                 Content="{StaticResource Icon_selectlasso}"
                                  ToolTip="なげなわで選択 (L)" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="Pan" Checked="OnToolChecked"
