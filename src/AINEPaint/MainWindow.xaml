@@ -24,9 +24,10 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />  <!-- メニュー -->
+            <RowDefinition Height="Auto" />  <!-- ブラシプリセット -->
+            <RowDefinition Height="*" />     <!-- 本体 -->
+            <RowDefinition Height="Auto" />  <!-- 下部バー -->
         </Grid.RowDefinitions>
 
         <!-- ===== メニュー ===== -->
@@ -57,8 +58,27 @@
             </MenuItem>
         </Menu>
 
+        <!-- ===== ブラシプリセット ===== -->
+        <Border Grid.Row="1"
+                Background="{StaticResource PanelBrush}"
+                BorderBrush="{StaticResource BorderBrush2}"
+                BorderThickness="0,0,0,1"
+                Padding="10,5">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="＋ 今のブラシを登録"
+                        Height="28" Padding="10,0" Margin="8,0,0,0" Foreground="#1E1E1E"
+                        Click="OnAddPresetClick"
+                        ToolTip="今のサイズ・不透明度・色・ブラシ種別を登録します" />
+                <TextBlock DockPanel.Dock="Left" Text="プリセット" VerticalAlignment="Center"
+                           Margin="0,0,12,0" Opacity="0.7" FontSize="12" />
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="PresetPanel" Orientation="Horizontal" />
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
         <!-- ===== 本体 ===== -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="70" />
                 <ColumnDefinition Width="*" />
@@ -174,7 +194,7 @@
         </Grid>
 
         <!-- ===== 下部バー ===== -->
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 Background="{StaticResource PanelBrush}"
                 BorderBrush="{StaticResource BorderBrush2}"
                 BorderThickness="0,1,0,0"

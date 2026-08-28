@@ -11,6 +11,7 @@ using AINEPaint.History;
 using AINEPaint.IO;
 using AINEPaint.Layers;
 using AINEPaint.Selection;
+using AINEPaint.Settings;
 using AINEPaint.Views;
 using Microsoft.Win32;
 using SkiaSharp;
@@ -31,6 +32,8 @@ public partial class MainWindow : Window
     /// <summary>最後に保存してから変更があるか。</summary>
     private bool _isDirty;
 
+    private AppSettings _settings = new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -40,9 +43,189 @@ public partial class MainWindow : Window
         Canvas.BeforeDocumentChange += OnBeforeDocumentChange;
         _history.Changed += UpdateHistoryMenu;
 
-        ApplyBrushColor(SKColors.Black);
+        _settings = SettingsStore.Load();
+        ApplySettings(_settings);
+
         UpdateHistoryMenu();
         UpdateStatus();
+    }
+
+    // ===== 設定 =====
+
+    private void ApplySettings(AppSettings settings)
+    {
+        SizeSlider.Value = Math.Clamp(settings.BrushSize, SizeSlider.Minimum, SizeSlider.Maximum);
+        OpacitySlider.Value = Math.Clamp(settings.BrushOpacity * 100.0, 0, 100);
+        ToleranceSlider.Value = Math.Clamp(settings.FillTolerance, ToleranceSlider.Minimum, ToleranceSlider.Maximum);
+        FillExpandSlider.Value = Math.Clamp(settings.FillExpand, FillExpandSlider.Minimum, FillExpandSlider.Maximum);
+
+        ApplyBrushColor(ColorUtil.TryParseHex(settings.BrushColor, out var color) ? color : SKColors.Black);
+
+        _history.MaxEntries = Math.Max(1, settings.UndoMaxEntries);
+        _history.MaxBytes = Math.Max(16, settings.UndoMaxMegabytes) * 1024L * 1024L;
+
+        RestoreWindowPlacement(settings);
+        RefreshPresetBar();
+    }
+
+    private void RestoreWindowPlacement(AppSettings settings)
+    {
+        if (settings.WindowWidth >= MinWidth) Width = settings.WindowWidth;
+        if (settings.WindowHeight >= MinHeight) Height = settings.WindowHeight;
+
+        // 前回のモニタが外れている場合に、画面外へ復元してしまわないよう確認する
+        if (settings.WindowLeft is { } left && settings.WindowTop is { } top)
+        {
+
+            bool onScreen =
+                left + 100 > SystemParameters.VirtualScreenLeft &&
+                top + 40 > SystemParameters.VirtualScreenTop &&
+                left < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 100 &&
+                top < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 40;
+
+            if (onScreen)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = left;
+                Top = top;
+            }
+        }
+
+        if (settings.WindowMaximized) WindowState = WindowState.Maximized;
+    }
+
+    private void CaptureSettings()
+    {
+        _settings.BrushSize = (float)SizeSlider.Value;
+        _settings.BrushOpacity = (float)(OpacitySlider.Value / 100.0);
+        _settings.BrushColor = ColorUtil.ToHex(Canvas.Brush.Color);
+        _settings.FillTolerance = (int)ToleranceSlider.Value;
+        _settings.FillExpand = (int)FillExpandSlider.Value;
+
+        _settings.WindowMaximized = WindowState == WindowState.Maximized;
+
+        // 最大化中は元のサイズが取れないので、そのときだけ保存しない
+        if (WindowState == WindowState.Normal)
+        {
+            _settings.WindowWidth = Width;
+            _settings.WindowHeight = Height;
+            _settings.WindowLeft = Left;
+            _settings.WindowTop = Top;
+        }
+    }
+
+    // ===== ブラシプリセット =====
+
+    private void OnAddPresetClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new TextInputDialog("プリセット名", $"ブラシ {_settings.Presets.Count + 1}") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        _settings.Presets.Add(new BrushPreset
+        {
+            Name = dialog.Value,
+            Kind = Canvas.Brush.Kind.ToString(),
+            Size = Canvas.Brush.Size,
+            Opacity = Canvas.Brush.Opacity,
+            Color = ColorUtil.ToHex(Canvas.Brush.Color)
+        });
+
+        SettingsStore.Save(_settings);
+        RefreshPresetBar();
+    }
+
+    private void ApplyPreset(BrushPreset preset)
+    {
+        SizeSlider.Value = Math.Clamp(preset.Size, SizeSlider.Minimum, SizeSlider.Maximum);
+        OpacitySlider.Value = Math.Clamp(preset.Opacity * 100.0, 0, 100);
+
+        if (ColorUtil.TryParseHex(preset.Color, out var color))
+            ApplyBrushColor(color);
+
+        SelectTool(preset.Kind switch
+        {
+            "Pencil" => "Pencil",
+            "Eraser" => "Eraser",
+            _ => "Pen"
+        });
+    }
+
+    private void RefreshPresetBar()
+    {
+        if (PresetPanel is null) return;
+
+        PresetPanel.Children.Clear();
+
+        if (_settings.Presets.Count == 0)
+        {
+            PresetPanel.Children.Add(new TextBlock
+            {
+                Text = "（右の「＋ 今のブラシを登録」で追加できます）",
+                Opacity = 0.4,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            return;
+        }
+
+        foreach (var preset in _settings.Presets)
+            PresetPanel.Children.Add(CreatePresetButton(preset));
+    }
+
+    private FrameworkElement CreatePresetButton(BrushPreset preset)
+    {
+        ColorUtil.TryParseHex(preset.Color, out var color);
+        var brush = new SolidColorBrush(ColorUtil.ToWpf(color));
+
+        // 丸の大きさでブラシの太さが一目で分かるようにする
+        double dot = Math.Clamp(preset.Size / 200.0 * 20.0 + 4.0, 4.0, 24.0);
+
+        var shape = new System.Windows.Shapes.Ellipse
+        {
+            Width = dot,
+            Height = dot,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = Math.Max(0.15, preset.Opacity)
+        };
+
+        if (preset.Kind == "Eraser")
+        {
+            shape.Stroke = new SolidColorBrush(Colors.White);
+            shape.StrokeThickness = 2;
+        }
+        else
+        {
+            shape.Fill = brush;
+        }
+
+        var button = new Button
+        {
+            Width = 34,
+            Height = 28,
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(0),
+            Content = shape,
+            Cursor = Cursors.Hand,
+            ToolTip = $"{preset.Name}" + Environment.NewLine +
+                      $"サイズ {preset.Size:0} / 不透明度 {preset.Opacity * 100:0}%" + Environment.NewLine +
+                      "右クリックで削除"
+        };
+
+        button.Click += (_, _) => ApplyPreset(preset);
+
+        button.MouseRightButtonUp += (_, _) =>
+        {
+            var answer = MessageBox.Show(this, $"プリセット「{preset.Name}」を削除しますか？",
+                                         "AINE Paint", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes) return;
+
+            _settings.Presets.Remove(preset);
+            SettingsStore.Save(_settings);
+            RefreshPresetBar();
+        };
+
+        return button;
     }
 
     protected override void OnClosed(EventArgs e)
@@ -217,7 +400,13 @@ public partial class MainWindow : Window
     private void OnWindowClosing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!ConfirmDiscardChanges())
+        {
             e.Cancel = true;
+            return;
+        }
+
+        CaptureSettings();
+        SettingsStore.Save(_settings);
     }
 
     private void MarkDirty()
