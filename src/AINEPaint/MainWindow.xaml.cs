@@ -48,6 +48,9 @@ public partial class MainWindow : Window
 
         UpdateHistoryMenu();
         UpdateStatus();
+
+        // ウィンドウが出来上がってから開く（エラー表示に親ウィンドウが要るため）
+        Loaded += (_, _) => OpenFromCommandLine();
     }
 
     // ===== 設定 =====
@@ -289,20 +292,51 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) != true) return;
 
+        OpenPath(dialog.FileName);
+    }
+
+    /// <summary>
+    /// パスを指定して開く。ダイアログからも、関連付けからの起動からも使う。
+    /// 拡張子でプロジェクトか画像かを判断する。
+    /// </summary>
+    public void OpenPath(string path)
+    {
         try
         {
-            bool isProject = string.Equals(Path.GetExtension(dialog.FileName),
+            bool isProject = string.Equals(Path.GetExtension(path),
                                            ProjectFile.Extension, StringComparison.OrdinalIgnoreCase);
 
             if (isProject)
-                SetDocument(ProjectFile.Load(dialog.FileName), dialog.FileName);
+                SetDocument(ProjectFile.Load(path), path);
             else
                 // 画像から始めた場合は上書き保存先を持たせない（元画像を壊さないため）
-                SetDocument(ImageFile.Import(dialog.FileName), null);
+                SetDocument(ImageFile.Import(path), null);
         }
         catch (Exception ex)
         {
             ShowError("開けませんでした。", ex);
+        }
+    }
+
+    /// <summary>
+    /// 関連付けやドラッグ＆ドロップで渡されたファイルを開く。
+    /// 起動直後に呼ばれるので、失敗しても起動そのものは妨げない。
+    /// </summary>
+    private void OpenFromCommandLine()
+    {
+        try
+        {
+            var args = Environment.GetCommandLineArgs();
+            if (args.Length < 2) return;
+
+            string path = args[1];
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
+
+            OpenPath(path);
+        }
+        catch
+        {
+            // 引数がおかしくても、空の状態で起動できれば十分
         }
     }
 

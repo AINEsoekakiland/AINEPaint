@@ -97,6 +97,23 @@ src/AINEPaint/
 
 Phase 2以降はMVP完成後に着手する。
 
+## ダウンロード
+
+[GitHub Releases](https://github.com/ainesoekakiland/AINEPaint/releases) から
+`AINEPaint-v0.1.0-Setup.exe` をダウンロードしてください。
+
+`.NET` のインストールは不要です。インストーラーは管理者権限を求めません。
+Portable で使いたい場合は Releases の `AINEPaint.exe` をそのまま置いて実行できます。
+
+## 配布用ビルド
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build\publish.ps1
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" build\AINEPaint.iss
+```
+
+`publish\AINEPaint.exe`（単一exe）と `dist\AINEPaint-v0.1.0-Setup.exe` ができます。
+
 ## ライセンス
 
-TBD
+MIT License — 詳細は [LICENSE](LICENSE) を参照。
