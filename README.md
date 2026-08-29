@@ -1,8 +1,24 @@
 # AINE Paint
 
-Windows向け 無料お絵描きソフト（StudioAINE）
+Windows向けの、無料のお絵描きソフトです。
 
-現在: **v0.1.0 / MVP 完成**
+子どもが日常的に使えることを第一に考えて作っています。
+インストールも起動も軽く、押しやすい大きなボタン、
+落ち着いた色のダークテーマ。広告は入りません。
+
+**[最新版をダウンロード](https://github.com/AINEsoekakiland/AINEPaint/releases/latest)**
+（Windows 10 / 11・`.NET` のインストール不要・管理者権限も不要）
+
+## できること
+
+- **キャンバス** — サイズ指定、白/透明の背景、ズーム、パン
+- **ブラシ** — ペン / 鉛筆 / 消しゴム、サイズ・不透明度・色、筆圧対応
+- **色** — カラーピッカー（HSV / HEX / RGB）、スポイト、ブラシプリセット
+- **塗りつぶし** — 許容値と「はみ出し」の調整つき
+- **レイヤー** — 追加 / 複製 / 削除 / 並び替え / 表示切替 / 名前 / 不透明度
+- **選択と変形** — 長方形・なげなわで選び、移動・拡大縮小・回転
+- **元に戻す** — 50手ぶん。大きなキャンバスでも待たされません
+- **保存** — 独自形式 `.ainpaint`、PNG書き出し（透明を保持）、PNG / JPG 読み込み
 
 ## 技術構成
 
@@ -11,18 +27,19 @@ Windows向け 無料お絵描きソフト（StudioAINE）
 | 言語 / ランタイム | C# / .NET 9 (net9.0-windows) |
 | UI | WPF |
 | 描画エンジン | SkiaSharp (SkiaSharp.Views.WPF) |
-| 筆圧 | WPF Stylus API（次ステップ以降で実装） |
-| 配布 | 自己完結publish + インストーラー（後日） |
+| 筆圧 | WPF Stylus API |
+| 配布 | 自己完結 publish（単一exe）＋ Inno Setup |
 
 ## ビルドと起動
 
 ```powershell
-cd C:\Users\a\source\AINEPaint
-dotnet restore
+git clone https://github.com/AINEsoekakiland/AINEPaint.git
+cd AINEPaint
 dotnet run --project src\AINEPaint\AINEPaint.csproj
 ```
 
 Visual Studio / VS Code で `AINEPaint.sln` を開いても可。
+必要なのは .NET 9 SDK だけです。
 
 ## プロジェクト構造（責務分離）
 
@@ -97,14 +114,32 @@ src/AINEPaint/
 
 Phase 2以降はMVP完成後に着手する。
 
-## ダウンロード
+## ダウンロードと導入
 
-**[最新版をダウンロード](https://github.com/AINEsoekakiland/AINEPaint/releases/latest)**
+[Releases](https://github.com/AINEsoekakiland/AINEPaint/releases/latest) から
+`AINEPaint-v0.1.0-Setup.exe` を実行してください。
 
-`AINEPaint-v0.1.0-Setup.exe` を実行するとインストールできます。
+- `.NET` のインストールは不要です（ランタイムを同梱しています）
+- インストーラーは**管理者権限を求めません**
+- `.ainpaint` ファイルはダブルクリックで開けるようになります
+- インストールせずに使いたい場合は、Releases の `AINEPaint.exe` を
+  好きな場所に置いてそのまま実行できます（Portable 版）
 
-`.NET` のインストールは不要です。インストーラーは管理者権限を求めません。
-Portable で使いたい場合は Releases の `AINEPaint.exe` をそのまま置いて実行できます。
+### ダウンロード時に警告が出る場合
+
+公開して間もないソフトウェアには、ブラウザと Windows が警告を表示することがあります。
+
+| 場面 | 表示 | 対処 |
+|---|---|---|
+| ダウンロード時 | 「一般的にダウンロードされていません」 | ダウンロード一覧の項目から「保持する」を選ぶ |
+| 実行時 | 「WindowsによってPCが保護されました」 | 「詳細情報」→「実行」を選ぶ |
+
+いずれもダウンロード回数がまだ少ないことが理由で、ウイルスとして
+検出されているわけではありません。コード署名証明書を取得していないため、
+Windows が発行元を確認できない状態になっています。
+
+ソースコードはすべてこのリポジトリで公開しています。
+内容を確認したうえで、ご自身でビルドすることもできます。
 
 ## 配布用ビルド
 
