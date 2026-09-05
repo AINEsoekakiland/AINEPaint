@@ -4,7 +4,7 @@
 ; ビルド:  ISCC.exe build\AINEPaint.iss
 
 #define AppName        "AINE Paint"
-#define AppVersion      "0.1.0"
+#define AppVersion      "0.2.0"
 #define AppPublisher    "StudioAINE"
 #define AppExeName      "AINEPaint.exe"
 
