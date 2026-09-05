@@ -13,6 +13,7 @@
     <Color x:Key="ForegroundColor">#E8E8E8</Color>
     <Color x:Key="AccentColor">#4EA1FF</Color>
     <Color x:Key="HoverColor">#333336</Color>
+    <Color x:Key="SelectedColor">#1F3B5C</Color>
 
     <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}" />
     <SolidColorBrush x:Key="PanelBrush"      Color="{StaticResource PanelColor}" />
@@ -20,6 +21,7 @@
     <SolidColorBrush x:Key="ForegroundBrush" Color="{StaticResource ForegroundColor}" />
     <SolidColorBrush x:Key="AccentBrush"     Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="HoverBrush"      Color="{StaticResource HoverColor}" />
+    <SolidColorBrush x:Key="SelectedBrush"   Color="{StaticResource SelectedColor}" />
 
     <!-- ツールボタン: 娘が押しやすいよう大きめ + ツールチップ前提 -->
     <Style x:Key="ToolButtonStyle" TargetType="ToggleButton">
@@ -75,6 +77,46 @@
                 <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
             </Trigger>
         </Style.Triggers>
+    </Style>
+
+    <!--
+        レイヤー一覧の行。
+        WPF 既定の ListBoxItem は、ListBox がフォーカスを失うと選択色が薄くなり、
+        キャンバスをクリックした瞬間にどれを選んでいるか分からなくなる。
+        そのため IsSelected だけで見た目を決めるテンプレートを自前で持つ。
+    -->
+    <Style x:Key="LayerItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="Accent" Grid.Column="0" Margin="0,3"
+                                    Background="Transparent" CornerRadius="2" />
+                            <ContentPresenter Grid.Column="1" Margin="6,0,4,0"
+                                              VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectedBrush}" />
+                            <Setter TargetName="Accent" Property="Background" Value="{StaticResource AccentBrush}" />
+                            <Setter Property="FontWeight" Value="Bold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>

@@ -192,6 +192,7 @@
                              Background="{StaticResource PanelBrush}"
                              BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
                              HorizontalContentAlignment="Stretch"
+                             ItemContainerStyle="{StaticResource LayerItemStyle}"
                              SelectionChanged="OnLayerSelectionChanged"
                              MouseDoubleClick="OnLayerListDoubleClick"
                              ToolTip="ダブルクリックで名前を変更できます">
@@ -239,6 +240,11 @@
                             VerticalAlignment="Center" ValueChanged="OnOpacityChanged" />
                     <TextBlock x:Name="OpacityValueText" Text="100%" Width="42" TextAlignment="Right"
                                VerticalAlignment="Center" Margin="8,0,0,0" Opacity="0.7" />
+
+                    <CheckBox x:Name="PressureCheck" Content="筆圧" IsChecked="True"
+                              VerticalAlignment="Center" Margin="24,0,0,0" Cursor="Hand"
+                              Checked="OnPressureChanged" Unchecked="OnPressureChanged"
+                              ToolTip="ペンタブレットの筆圧で線の太さを変えます。外すと太さが一定になります" />
                   </StackPanel>
 
                   <StackPanel x:Name="FillOptions" Orientation="Horizontal" VerticalAlignment="Center"

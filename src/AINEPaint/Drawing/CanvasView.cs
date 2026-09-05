@@ -60,13 +60,53 @@ public class CanvasView : SKElement
     public bool PanToolActive { get; set; }
 
     /// <summary>スポイトが選択されている間 true。左クリックで色を拾う。</summary>
-    public bool EyedropperActive { get; set; }
+    public bool EyedropperActive
+    {
+        get => _eyedropperActive;
+        set
+        {
+            if (_eyedropperActive == value) return;
+            _eyedropperActive = value;
+            UpdateCursor();
+            InvalidateVisual();
+        }
+    }
+
+    private bool _eyedropperActive;
 
     /// <summary>
     /// ブラシの太さを表す丸カーソルを出すかどうか。
     /// ペン / 鉛筆 / 消しゴムのときだけ true にする（初期ツールはペン）。
     /// </summary>
-    public bool BrushCursorVisible { get; set; } = true;
+    public bool BrushCursorVisible
+    {
+        get => _brushCursorVisible;
+        set
+        {
+            if (_brushCursorVisible == value) return;
+            _brushCursorVisible = value;
+            UpdateCursor();
+            InvalidateVisual();
+        }
+    }
+
+    private bool _brushCursorVisible = true;
+
+    /// <summary>
+    /// ポインタの形を決める。
+    /// 丸カーソルを出している間は標準カーソルを消す。
+    /// OS が描く矢印と、こちらが1フレーム遅れて描く丸が並ぶと、遅れが目立つため。
+    /// </summary>
+    private void UpdateCursor()
+    {
+        if (_document is null)
+        {
+            Cursor = Cursors.Arrow;
+            return;
+        }
+
+        Cursor = BrushCursorVisible && !EyedropperActive ? Cursors.None : Cursors.Cross;
+    }
 
     /// <summary>塗りつぶしが選択されている間 true。左クリックで塗る。</summary>
     public bool FillToolActive { get; set; }
@@ -142,7 +182,7 @@ public class CanvasView : SKElement
                 _document.StructureChanged += InvalidateVisual;
             }
 
-            Cursor = value is null ? Cursors.Arrow : Cursors.Cross;
+            UpdateCursor();
             FitToWindow();
             InvalidateVisual();
             ViewStateChanged?.Invoke();
@@ -285,6 +325,23 @@ public class CanvasView : SKElement
 
         canvas.DrawCircle(screen.X, screen.Y, radius, shadow);
         canvas.DrawCircle(screen.X, screen.Y, radius, line);
+
+        // 標準カーソルを消しているので、中心が分かる目印を出す
+        using var center = new SKPaint
+        {
+            Style = SKPaintStyle.Fill,
+            Color = new SKColor(0xFF, 0xFF, 0xFF, 0xC0),
+            IsAntialias = true
+        };
+        using var centerEdge = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1f,
+            Color = new SKColor(0x00, 0x00, 0x00, 0x80),
+            IsAntialias = true
+        };
+        canvas.DrawCircle(screen.X, screen.Y, 1.6f, center);
+        canvas.DrawCircle(screen.X, screen.Y, 1.6f, centerEdge);
     }
 
     private const float LoupeRadius = 46f;
@@ -615,7 +672,7 @@ public class CanvasView : SKElement
         if (_isPanning)
         {
             _isPanning = false;
-            Cursor = _document is null ? Cursors.Arrow : Cursors.Cross;
+            UpdateCursor();
             ReleaseMouseCapture();
             return;
         }
@@ -968,6 +1025,8 @@ public class CanvasView : SKElement
     {
         try
         {
+            if (!Brush.UsePressure) return 1f;
+
             var device = Stylus.CurrentStylusDevice;
             if (device is null || device.TabletDevice?.Type != TabletDeviceType.Stylus)
                 return 1f;

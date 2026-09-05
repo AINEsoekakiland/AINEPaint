@@ -15,6 +15,12 @@ namespace AINEPaint.Brushes;
 /// 指を離した時点でバッファ全体を1回だけ不透明度を掛けて合成する。
 /// こうしないと、同じストローク内で線が重なった箇所だけ濃くなる。
 /// 消しゴムも同じバッファを使い、合成時のブレンドモードだけを変える。
+///
+/// 【太さ】
+/// 区間ごとに1つの線幅で描くと、筆圧が変わったとき線が「太さの違う棒の連結」になり、
+/// 払いが階段状のかたまりに見える。そのため区間を細かく刻み、
+/// 太さを連続的に変えながら円を並べて描いている（スタンプ方式）。
+/// 筆圧そのものも生値は細かく揺れるので、移動平均で均してから使う。
 /// </summary>
 public sealed class StrokeRenderer : IDisposable
 {
@@ -30,6 +36,8 @@ public sealed class StrokeRenderer : IDisposable
 
     private StrokePoint _previous;
     private SKPoint _lastMid;
+    private float _lastWidth;
+    private float _smoothPressure = 1f;
     private bool _hasSegment;
     private SKRect _previousDirty = SKRect.Empty;
 
@@ -60,13 +68,13 @@ public sealed class StrokeRenderer : IDisposable
         _previous = start;
         _lastMid = new SKPoint(start.X, start.Y);
         _hasSegment = false;
+        _smoothPressure = Math.Clamp(start.Pressure, 0.01f, 1f);
+        _lastWidth = WidthFor(settings, _smoothPressure);
         DirtyRect = SKRect.Empty;
 
         // 置いた瞬間に点が残るように、丸を1つ打つ
-        float radius = WidthFor(settings, start.Pressure, start.Pressure) * 0.5f;
-        using var dot = _paint.Clone();
-        dot.Style = SKPaintStyle.Fill;
-        _bufferCanvas.DrawCircle(start.X, start.Y, radius, dot);
+        float radius = _lastWidth * 0.5f;
+        _bufferCanvas.DrawCircle(start.X, start.Y, radius, _paint);
         Expand(new SKRect(start.X - radius, start.Y - radius, start.X + radius, start.Y + radius), 2f);
     }
 
@@ -81,17 +89,14 @@ public sealed class StrokeRenderer : IDisposable
 
         var mid = new SKPoint((_previous.X + point.X) * 0.5f, (_previous.Y + point.Y) * 0.5f);
 
-        float width = WidthFor(settings, _previous.Pressure, point.Pressure);
-        _paint.StrokeWidth = width;
+        // 筆圧の生値は1点ごとに細かく揺れる。そのまま太さにすると線がガタつく。
+        _smoothPressure += (Math.Clamp(point.Pressure, 0.01f, 1f) - _smoothPressure) * PressureSmoothing;
+        float width = WidthFor(settings, _smoothPressure);
 
-        using var path = new SKPath();
-        path.MoveTo(_lastMid);
-        path.QuadTo(_previous.X, _previous.Y, mid.X, mid.Y);
-        _bufferCanvas.DrawPath(path, _paint);
-
-        Expand(path.Bounds, width * 0.5f + 2f);
+        StampQuad(_lastMid, new SKPoint(_previous.X, _previous.Y), mid, _lastWidth, width);
 
         _lastMid = mid;
+        _lastWidth = width;
         _previous = point;
         _hasSegment = true;
     }
@@ -108,11 +113,9 @@ public sealed class StrokeRenderer : IDisposable
         // 最後の入力点までは中点で止まっているので、残りを繋いで描き切る
         if (_paint is not null && _hasSegment)
         {
-            _bufferCanvas.DrawLine(_lastMid.X, _lastMid.Y, _previous.X, _previous.Y, _paint);
-            Expand(new SKRect(
-                Math.Min(_lastMid.X, _previous.X), Math.Min(_lastMid.Y, _previous.Y),
-                Math.Max(_lastMid.X, _previous.X), Math.Max(_lastMid.Y, _previous.Y)),
-                _paint.StrokeWidth * 0.5f + 2f);
+            var end = new SKPoint(_previous.X, _previous.Y);
+            var control = new SKPoint((_lastMid.X + end.X) * 0.5f, (_lastMid.Y + end.Y) * 0.5f);
+            StampQuad(_lastMid, control, end, _lastWidth, _lastWidth);
         }
 
         var dirty = DirtyRect;
@@ -175,11 +178,63 @@ public sealed class StrokeRenderer : IDisposable
         _previousDirty = SKRect.Empty;
     }
 
-    /// <summary>筆圧は今のところ線幅にのみ反映する。マウスでは Pressure = 1.0 で一定。</summary>
-    private static float WidthFor(BrushSettings settings, float pressureA, float pressureB)
+    /// <summary>筆圧の追従の速さ。小さいほど滑らかになるが、反応は鈍くなる。</summary>
+    private const float PressureSmoothing = 0.35f;
+
+    /// <summary>円を並べる間隔。太さに対する割合。小さいほど滑らかで、そのぶん重い。</summary>
+    private const float StampSpacingRatio = 0.10f;
+
+    /// <summary>1区間あたりの円の数の上限。拡大表示で極端に増えるのを防ぐ。</summary>
+    private const int MaxStampsPerSegment = 512;
+
+    /// <summary>
+    /// 2次ベジェの区間を、太さを w0 から w1 へ変えながら円で埋める。
+    /// 円は不透明で重ねて描くので、重なっても濃くはならない（不透明度は合成時に一度だけ掛ける）。
+    /// </summary>
+    private void StampQuad(SKPoint p0, SKPoint control, SKPoint p1, float w0, float w1)
     {
-        float pressure = Math.Clamp((pressureA + pressureB) * 0.5f, 0.05f, 1f);
-        return Math.Max(0.5f, settings.Size * pressure);
+        if (_bufferCanvas is null || _paint is null) return;
+
+        float length = Distance(p0, control) + Distance(control, p1);
+        float spacing = Math.Max(0.35f, Math.Max(w0, w1) * StampSpacingRatio);
+        int steps = Math.Clamp((int)MathF.Ceiling(length / spacing), 1, MaxStampsPerSegment);
+
+        for (int i = 1; i <= steps; i++)
+        {
+            float t = (float)i / steps;
+            float u = 1f - t;
+
+            float x = u * u * p0.X + 2f * u * t * control.X + t * t * p1.X;
+            float y = u * u * p0.Y + 2f * u * t * control.Y + t * t * p1.Y;
+            float radius = Math.Max(0.25f, (w0 + (w1 - w0) * t) * 0.5f);
+
+            _bufferCanvas.DrawCircle(x, y, radius, _paint);
+        }
+
+        float pad = Math.Max(w0, w1) * 0.5f + 2f;
+        var bounds = new SKRect(
+            Math.Min(p0.X, Math.Min(control.X, p1.X)), Math.Min(p0.Y, Math.Min(control.Y, p1.Y)),
+            Math.Max(p0.X, Math.Max(control.X, p1.X)), Math.Max(p0.Y, Math.Max(control.Y, p1.Y)));
+        Expand(bounds, pad);
+    }
+
+    private static float Distance(SKPoint a, SKPoint b)
+    {
+        float dx = a.X - b.X;
+        float dy = a.Y - b.Y;
+        return MathF.Sqrt(dx * dx + dy * dy);
+    }
+
+    /// <summary>
+    /// 筆圧を線幅へ変換する。
+    /// そのまま比例させると軽く触れた部分が太く残って払いが鈍るので、
+    /// 弱い側をより細くする補正を掛けている。
+    /// </summary>
+    private static float WidthFor(BrushSettings settings, float pressure)
+    {
+        float p = Math.Clamp(pressure, 0.01f, 1f);
+        float curved = MathF.Pow(p, 1.4f);
+        return Math.Max(0.35f, settings.Size * curved);
     }
 
     private void Expand(SKRect rect, float padding)
@@ -196,11 +251,10 @@ public sealed class StrokeRenderer : IDisposable
             ? SKColors.Black          // 消しゴムは形だけのマスクとして使う
             : settings.Color;
 
+        // 円を並べて描くので Fill。線幅は使わない。
         return new SKPaint
         {
-            Style = SKPaintStyle.Stroke,
-            StrokeCap = SKStrokeCap.Round,
-            StrokeJoin = SKStrokeJoin.Round,
+            Style = SKPaintStyle.Fill,
             IsAntialias = true,
             Color = color.WithAlpha(255)
         };

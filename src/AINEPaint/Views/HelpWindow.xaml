@@ -58,6 +58,7 @@
                 <TextBlock Style="{StaticResource P}" Text="バーはどこをクリックしても、その位置の値にすぐ変わります。" />
                 <TextBlock Style="{StaticResource P}" Text="太さは [ と ] キーでも変えられます。キャンバスの上ではカーソルが丸で表示され、その丸の大きさが今の太さです。" />
                 <TextBlock Style="{StaticResource P}" Text="太さと不透明度は、ペン・鉛筆・消しゴムでそれぞれ別に覚えます。消しゴムを太くしてもペンの太さは変わりません。" />
+                <TextBlock Style="{StaticResource P}" Text="「筆圧」のチェックを外すと、ペンタブレットでも太さが一定になります。線の太さを揃えたいときに使ってください。" />
                 <TextBlock Style="{StaticResource P}" Text="色は右下の四角いボタンから選びます。" />
 
                 <TextBlock Style="{StaticResource H}" Text="プリセット（上のバー）" />

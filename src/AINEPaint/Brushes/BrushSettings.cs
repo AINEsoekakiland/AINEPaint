@@ -23,6 +23,12 @@ public sealed class BrushSettings
     /// <summary>0.0〜1.0。</summary>
     public float Opacity { get; set; } = 1f;
 
+    /// <summary>
+    /// 筆圧を線の太さに反映するか。false ならペンタブでも太さは一定。
+    /// マウスでは元から筆圧が来ないので、この値に関わらず一定。
+    /// </summary>
+    public bool UsePressure { get; set; } = true;
+
     public SKColor Color { get; set; } = SKColors.Black;
 
     /// <summary>塗りつぶしの色の許容差（0〜255）。大きいほど広い範囲が塗られる。</summary>

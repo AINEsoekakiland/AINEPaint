@@ -70,6 +70,9 @@ public partial class MainWindow : Window
         ToleranceSlider.Value = Math.Clamp(settings.FillTolerance, ToleranceSlider.Minimum, ToleranceSlider.Maximum);
         FillExpandSlider.Value = Math.Clamp(settings.FillExpand, FillExpandSlider.Minimum, FillExpandSlider.Maximum);
 
+        PressureCheck.IsChecked = settings.UsePressure;
+        Canvas.Brush.UsePressure = settings.UsePressure;
+
         ApplyBrushColor(ColorUtil.TryParseHex(settings.BrushColor, out var color) ? color : SKColors.Black);
 
         _history.MaxEntries = Math.Max(1, settings.UndoMaxEntries);
@@ -181,6 +184,7 @@ public partial class MainWindow : Window
         _settings.BrushColor = ColorUtil.ToHex(Canvas.Brush.Color);
         _settings.FillTolerance = (int)ToleranceSlider.Value;
         _settings.FillExpand = (int)FillExpandSlider.Value;
+        _settings.UsePressure = PressureCheck.IsChecked == true;
 
         _settings.WindowMaximized = WindowState == WindowState.Maximized;
 
@@ -880,6 +884,14 @@ public partial class MainWindow : Window
 
         Canvas.Brush.FillTolerance = (int)e.NewValue;
         ToleranceValueText.Text = ((int)e.NewValue).ToString();
+    }
+
+    /// <summary>筆圧を使うかどうかの切り替え。</summary>
+    private void OnPressureChanged(object sender, RoutedEventArgs e)
+    {
+        if (Canvas is null || PressureCheck is null) return;
+
+        Canvas.Brush.UsePressure = PressureCheck.IsChecked == true;
     }
 
     private void OnFillExpandChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

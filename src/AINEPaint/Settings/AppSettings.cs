@@ -23,6 +23,9 @@ public sealed class AppSettings
     [JsonPropertyName("brushColor")]
     public string BrushColor { get; set; } = "#000000";
 
+    [JsonPropertyName("usePressure")]
+    public bool UsePressure { get; set; } = true;
+
     [JsonPropertyName("fillTolerance")]
     public int FillTolerance { get; set; } = 24;
 
