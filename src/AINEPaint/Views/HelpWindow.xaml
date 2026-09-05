@@ -1,0 +1,94 @@
+<Window x:Class="AINEPaint.Views.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AINE Paint の使い方"
+        Icon="/Assets/app.png"
+        Width="720" Height="660"
+        MinWidth="480" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BackgroundBrush}"
+        TextElement.Foreground="{StaticResource ForegroundBrush}">
+
+    <Window.Resources>
+        <Style x:Key="H" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,20,0,6" />
+        </Style>
+        <Style x:Key="P" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+            <Setter Property="LineHeight" Value="20" />
+        </Style>
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource P}">
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom"
+                Background="{StaticResource PanelBrush}"
+                BorderBrush="{StaticResource BorderBrush2}"
+                BorderThickness="0,1,0,0"
+                Padding="12,10">
+            <Button Content="閉じる" Width="100" Height="30" Foreground="#1E1E1E"
+                    HorizontalAlignment="Right" Click="OnCloseClick" />
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,16,24,24">
+            <StackPanel>
+
+                <TextBlock Text="AINE Paint の使い方" FontSize="20" FontWeight="Bold" Margin="0,0,0,4" />
+                <TextBlock Style="{StaticResource Note}"
+                           Text="まずは ファイル → 新規キャンバス（Ctrl+N）でキャンバスを作るところから。" />
+
+                <TextBlock Style="{StaticResource H}" Text="ツール（左側のボタン）" />
+                <TextBlock Style="{StaticResource P}" Text="ペン (P)　なめらかな線を描きます。ペンタブレットなら筆圧で太さが変わります。" />
+                <TextBlock Style="{StaticResource P}" Text="鉛筆 (N)　ペンより少し薄い線を描きます。" />
+                <TextBlock Style="{StaticResource P}" Text="消しゴム (E)　選んでいるレイヤーだけを消します。下のレイヤーは消えません。" />
+                <TextBlock Style="{StaticResource P}" Text="塗りつぶし (G)　クリックした場所とつながっている、色の近い範囲を塗ります。" />
+                <TextBlock Style="{StaticResource Note}" Text="うまく塗れないときは、下のバーの「許容値」を大きくします。線の縁に白い隙間が残るときは「はみ出し」を大きくします。" />
+                <TextBlock Style="{StaticResource P}" Text="長方形で選択 (M) / なげなわで選択 (L)　範囲を選びます。何もない所をクリックすると選択が消えます。" />
+                <TextBlock Style="{StaticResource P}" Text="変形 (T)　選んだ範囲を動かす・大きさを変える・回します。四隅をドラッグで拡大縮小、上の丸で回転。Enter で確定、Esc で取り消し。" />
+                <TextBlock Style="{StaticResource P}" Text="移動 (H)　画面をドラッグしてスクロールします。スペースキーを押しながらドラッグ、マウスの中ボタンドラッグでも同じことができます。" />
+                <TextBlock Style="{StaticResource P}" Text="スポイト (I)　クリックした場所の色を描画色にします。カーソルの上に拡大した丸が出るので、拾いたい色に合わせてください。" />
+
+                <TextBlock Style="{StaticResource H}" Text="太さ・不透明度・色（下のバー）" />
+                <TextBlock Style="{StaticResource P}" Text="バーはどこをクリックしても、その位置の値にすぐ変わります。" />
+                <TextBlock Style="{StaticResource P}" Text="太さは [ と ] キーでも変えられます。キャンバスの上ではカーソルが丸で表示され、その丸の大きさが今の太さです。" />
+                <TextBlock Style="{StaticResource P}" Text="太さと不透明度は、ペン・鉛筆・消しゴムでそれぞれ別に覚えます。消しゴムを太くしてもペンの太さは変わりません。" />
+                <TextBlock Style="{StaticResource P}" Text="色は右下の四角いボタンから選びます。" />
+
+                <TextBlock Style="{StaticResource H}" Text="プリセット（上のバー）" />
+                <TextBlock Style="{StaticResource P}" Text="「＋ 今のブラシを登録」で、今の種類・太さ・不透明度・色をまとめて保存できます。" />
+                <TextBlock Style="{StaticResource P}" Text="登録した丸をクリックすると呼び出し、右クリックで削除します。" />
+
+                <TextBlock Style="{StaticResource H}" Text="レイヤー（右側のパネル）" />
+                <TextBlock Style="{StaticResource P}" Text="＋ 追加　⧉ 複製　🗑 削除　↑ ↓ 並び替え" />
+                <TextBlock Style="{StaticResource P}" Text="チェックを外すと非表示になります。名前をダブルクリックすると名前を変えられます。" />
+                <TextBlock Style="{StaticResource P}" Text="一覧の上にあるものほど手前（上）に重なります。描けるのは選んでいる1枚だけです。" />
+
+                <TextBlock Style="{StaticResource H}" Text="元に戻す / やり直し" />
+                <TextBlock Style="{StaticResource P}" Text="上のバーの ↶ ↷ ボタン、または Ctrl+Z（戻る）／ Ctrl+Shift+Z・Ctrl+Y（すすむ）。" />
+
+                <TextBlock Style="{StaticResource H}" Text="表示" />
+                <TextBlock Style="{StaticResource P}" Text="マウスホイールで拡大・縮小します。Ctrl + / Ctrl - でも変わります。Ctrl+0 で全体表示に戻ります。" />
+
+                <TextBlock Style="{StaticResource H}" Text="保存" />
+                <TextBlock Style="{StaticResource P}" Text="Ctrl+S　.ainpaint 形式で保存します。レイヤーを分けたまま保存されるので、続きを描くときはこちら。" />
+                <TextBlock Style="{StaticResource P}" Text="Ctrl+E　PNG で書き出します。他のソフトやSNSに出すときはこちら。" />
+                <TextBlock Style="{StaticResource P}" Text="PNG や JPG を開いて、その上に描き足すこともできます。" />
+                <TextBlock Style="{StaticResource Note}" Text="画像から開いた場合は、上書き保存されません。保存すると保存先を聞かれます。" />
+
+                <TextBlock Style="{StaticResource H}" Text="ショートカット" />
+                <TextBlock Style="{StaticResource P}" Text="P ペン　N 鉛筆　E 消しゴム　G 塗りつぶし　M 長方形選択　L なげなわ　T 変形　H 移動　I スポイト" />
+                <TextBlock Style="{StaticResource P}" Text="[ ] 太さ　スペース+ドラッグ 画面移動" />
+                <TextBlock Style="{StaticResource P}" Text="Ctrl+N 新規　Ctrl+O 開く　Ctrl+S 保存　Ctrl+Shift+S 名前を付けて保存　Ctrl+E PNG書き出し" />
+                <TextBlock Style="{StaticResource P}" Text="Ctrl+Z 戻る　Ctrl+Shift+Z すすむ　Ctrl+A すべて選択　Ctrl+D 選択解除" />
+                <TextBlock Style="{StaticResource P}" Text="Ctrl++ 拡大　Ctrl+- 縮小　Ctrl+0 全体表示　F1 このヘルプ" />
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

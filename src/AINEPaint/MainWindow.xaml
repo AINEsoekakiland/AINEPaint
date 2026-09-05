@@ -57,6 +57,9 @@
                 <MenuItem Header="ズームアウト" InputGestureText="Ctrl+-" Click="OnZoomOutClick" />
                 <MenuItem Header="全体表示"     InputGestureText="Ctrl+0" Click="OnFitClick" />
             </MenuItem>
+            <MenuItem Header="ヘルプ(_H)">
+                <MenuItem Header="使い方..." InputGestureText="F1" Click="OnHelpClick" />
+            </MenuItem>
         </Menu>
 
         <!-- ===== ブラシプリセット ===== -->
@@ -70,6 +73,20 @@
                         Height="28" Padding="10,0" Margin="8,0,0,0" Foreground="#1E1E1E"
                         Click="OnAddPresetClick"
                         ToolTip="今のサイズ・不透明度・色・ブラシ種別を登録します" />
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center"
+                            Margin="0,0,14,0">
+                    <Button x:Name="UndoButton" Content="↶" Width="34" Height="28" Padding="0"
+                            FontSize="16" Foreground="#1E1E1E" IsEnabled="False"
+                            Click="OnUndoClick" ToolTip="元に戻す (Ctrl+Z)" />
+                    <Button x:Name="RedoButton" Content="↷" Width="34" Height="28" Padding="0"
+                            FontSize="16" Foreground="#1E1E1E" IsEnabled="False" Margin="4,0,0,0"
+                            Click="OnRedoClick" ToolTip="やり直し (Ctrl+Shift+Z)" />
+                    <Button Content="?" Width="28" Height="28" Padding="0"
+                            FontSize="14" Foreground="#1E1E1E" Margin="10,0,0,0"
+                            Click="OnHelpClick" ToolTip="使い方 (F1)" />
+                </StackPanel>
+                <Border DockPanel.Dock="Left" Width="1" Margin="0,2,14,2"
+                        Background="{StaticResource BorderBrush2}" />
                 <TextBlock DockPanel.Dock="Left" Text="プリセット" VerticalAlignment="Center"
                            Margin="0,0,12,0" Opacity="0.7" FontSize="12" />
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -167,6 +184,7 @@
                         </DockPanel>
                         <Slider x:Name="LayerOpacitySlider" Minimum="0" Maximum="100" Value="100"
                                 IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,4,0,0"
+                                IsMoveToPointEnabled="True"
                                 ValueChanged="OnLayerOpacityChanged" />
                     </StackPanel>
 
@@ -207,6 +225,7 @@
                   <StackPanel x:Name="BrushOptions" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="サイズ" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Slider x:Name="SizeSlider" Width="140" Minimum="1" Maximum="200" Value="12"
+                            IsMoveToPointEnabled="True"
                             SmallChange="1" LargeChange="8" IsSnapToTickEnabled="True" TickFrequency="1"
                             VerticalAlignment="Center" ValueChanged="OnSizeChanged"
                             ToolTip="ブラシの太さ（[ と ] でも変更できます）" />
@@ -215,6 +234,7 @@
 
                     <TextBlock Text="不透明度" VerticalAlignment="Center" Margin="24,0,8,0" />
                     <Slider x:Name="OpacitySlider" Width="140" Minimum="0" Maximum="100" Value="100"
+                            IsMoveToPointEnabled="True"
                             SmallChange="1" LargeChange="10" IsSnapToTickEnabled="True" TickFrequency="1"
                             VerticalAlignment="Center" ValueChanged="OnOpacityChanged" />
                     <TextBlock x:Name="OpacityValueText" Text="100%" Width="42" TextAlignment="Right"
@@ -226,6 +246,7 @@
                     <TextBlock Text="許容値" VerticalAlignment="Center" Margin="0,0,8,0"
                                ToolTip="大きくすると、色の近い部分までまとめて塗ります" />
                     <Slider x:Name="ToleranceSlider" Width="140" Minimum="0" Maximum="128" Value="24"
+                            IsMoveToPointEnabled="True"
                             IsSnapToTickEnabled="True" TickFrequency="1"
                             VerticalAlignment="Center" ValueChanged="OnToleranceChanged" />
                     <TextBlock x:Name="ToleranceValueText" Text="24" Width="34" TextAlignment="Right"
@@ -234,6 +255,7 @@
                     <TextBlock Text="はみ出し" VerticalAlignment="Center" Margin="24,0,8,0"
                                ToolTip="線の縁に白い隙間が残るときは大きくします" />
                     <Slider x:Name="FillExpandSlider" Width="100" Minimum="0" Maximum="6" Value="1"
+                            IsMoveToPointEnabled="True"
                             IsSnapToTickEnabled="True" TickFrequency="1"
                             VerticalAlignment="Center" ValueChanged="OnFillExpandChanged" />
                     <TextBlock x:Name="FillExpandValueText" Text="1" Width="24" TextAlignment="Right"

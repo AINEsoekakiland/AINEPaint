@@ -27,6 +27,9 @@ public class CanvasView : SKElement
     private readonly StrokeRenderer _stroke = new();
     private bool _isDrawing;
 
+    /// <summary>いまポインタがある位置（物理ピクセル）。キャンバス外なら null。</summary>
+    private SKPoint? _cursorScreen;
+
     private SKPath? _selectionPreview;
     private SKPoint _selectionStart;
     private bool _isSelecting;
@@ -58,6 +61,12 @@ public class CanvasView : SKElement
 
     /// <summary>スポイトが選択されている間 true。左クリックで色を拾う。</summary>
     public bool EyedropperActive { get; set; }
+
+    /// <summary>
+    /// ブラシの太さを表す丸カーソルを出すかどうか。
+    /// ペン / 鉛筆 / 消しゴムのときだけ true にする（初期ツールはペン）。
+    /// </summary>
+    public bool BrushCursorVisible { get; set; } = true;
 
     /// <summary>塗りつぶしが選択されている間 true。左クリックで塗る。</summary>
     public bool FillToolActive { get; set; }
@@ -229,6 +238,162 @@ public class CanvasView : SKElement
 
         if (_floating is not null)
             DrawTransformHandles(canvas, matrix);
+
+        DrawPointerOverlay(canvas);
+    }
+
+    // ===== ポインタ表示（太さの丸 / スポイトの拡大鏡） =====
+
+    /// <summary>ポインタの位置に補助表示を出す。すべて画面座標で描く。</summary>
+    private void DrawPointerOverlay(SKCanvas canvas)
+    {
+        if (_document is null || _isPanning) return;
+        if (_cursorScreen is not { } screen) return;
+
+        if (EyedropperActive)
+        {
+            DrawEyedropperLoupe(canvas, screen);
+            return;
+        }
+
+        if (BrushCursorVisible && _floating is null)
+            DrawBrushCursor(canvas, screen);
+    }
+
+    /// <summary>いまのブラシの太さと同じ大きさの丸を出す。太さが一目で分かるようにするため。</summary>
+    private void DrawBrushCursor(SKCanvas canvas, SKPoint screen)
+    {
+        float radius = Brush.Size * 0.5f * Viewport.Scale;
+
+        // 小さすぎると見えなくなるので下限を設ける
+        if (radius < 2f) radius = 2f;
+
+        using var shadow = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 3f,
+            Color = new SKColor(0x00, 0x00, 0x00, 0x80),
+            IsAntialias = true
+        };
+        using var line = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1.2f,
+            Color = new SKColor(0xFF, 0xFF, 0xFF, 0xE0),
+            IsAntialias = true
+        };
+
+        canvas.DrawCircle(screen.X, screen.Y, radius, shadow);
+        canvas.DrawCircle(screen.X, screen.Y, radius, line);
+    }
+
+    private const float LoupeRadius = 46f;
+    private const float LoupeZoom = 10f;
+    private const float LoupeGap = 22f;
+
+    /// <summary>
+    /// スポイト用の拡大表示。カーソルの上に丸を出し、その中身を拡大して見せる。
+    /// 中心の1マスがこれから拾う画素で、外側の輪がその色。
+    /// </summary>
+    private void DrawEyedropperLoupe(SKCanvas canvas, SKPoint screen)
+    {
+        if (_document is null) return;
+
+        float dpi = DpiScale;
+        float radius = LoupeRadius * dpi;
+        float zoom = LoupeZoom * dpi;
+
+        var doc = Viewport.ToDocument(screen.X, screen.Y);
+        int px = (int)MathF.Floor(doc.X);
+        int py = (int)MathF.Floor(doc.Y);
+
+        bool inside = px >= 0 && py >= 0 && px < _document.Width && py < _document.Height;
+        if (!inside) return;
+
+        // カーソルの上に出す。画面の上端に収まらないときだけ下へ回す
+        float cx = screen.X;
+        float cy = screen.Y - (radius + LoupeGap * dpi);
+        if (cy - radius < 0) cy = screen.Y + (radius + LoupeGap * dpi);
+
+        var sample = _document.SamplePixel(px, py);
+
+        using var circle = new SKPath();
+        circle.AddCircle(cx, cy, radius);
+
+        canvas.Save();
+        canvas.ClipPath(circle, SKClipOperation.Intersect, true);
+
+        // キャンバスの外側は暗いまま見せる
+        using (var back = new SKPaint { Color = new SKColor(0x14, 0x14, 0x14) })
+            canvas.DrawRect(cx - radius, cy - radius, radius * 2f, radius * 2f, back);
+
+        var zoomMatrix = SKMatrix.CreateScaleTranslation(
+            zoom, zoom, cx - doc.X * zoom, cy - doc.Y * zoom);
+
+        var docRect = SKRect.Create(0, 0, _document.Width, _document.Height);
+        var docOnScreen = zoomMatrix.MapRect(docRect);
+
+        // 市松模様は拡大せず、画面上の大きさのまま出す
+        if (_document.Background == CanvasBackground.Transparent)
+        {
+            _checkerTile ??= CreateCheckerTile();
+            using var shader = SKShader.CreateBitmap(_checkerTile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
+            using var checkerPaint = new SKPaint { Shader = shader };
+            canvas.DrawRect(docOnScreen, checkerPaint);
+        }
+        else
+        {
+            using var white = new SKPaint { Color = SKColors.White };
+            canvas.DrawRect(docOnScreen, white);
+        }
+
+        canvas.Save();
+        canvas.SetMatrix(zoomMatrix);
+        _document.Render(canvas, null, null, SKFilterQuality.None, null, null);
+        canvas.Restore();
+
+        // これから拾う画素を1マスだけ囲う
+        float bx = (px - doc.X) * zoom + cx;
+        float by = (py - doc.Y) * zoom + cy;
+        var cell = new SKRect(bx, by, bx + zoom, by + zoom);
+
+        using (var cellShadow = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke, StrokeWidth = 3f,
+            Color = new SKColor(0x00, 0x00, 0x00, 0x90), IsAntialias = false
+        })
+            canvas.DrawRect(cell, cellShadow);
+
+        using (var cellLine = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke, StrokeWidth = 1.2f,
+            Color = SKColors.White, IsAntialias = false
+        })
+            canvas.DrawRect(cell, cellLine);
+
+        canvas.Restore();
+
+        // 外周の輪が、いまカーソルの下にある色
+        float ringWidth = 6f * dpi;
+
+        using (var ring = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = ringWidth,
+            Color = sample.Alpha == 0 ? new SKColor(0x60, 0x60, 0x60) : new SKColor(sample.Red, sample.Green, sample.Blue),
+            IsAntialias = true
+        })
+            canvas.DrawCircle(cx, cy, radius - ringWidth * 0.5f, ring);
+
+        using (var edge = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f,
+            Color = new SKColor(0x00, 0x00, 0x00, 0xA0), IsAntialias = true
+        })
+        {
+            canvas.DrawCircle(cx, cy, radius, edge);
+            canvas.DrawCircle(cx, cy, radius - ringWidth, edge);
+        }
     }
 
     /// <summary>変形中の枠とハンドル。すべて画面座標で描くので、拡大しても大きさが変わらない。</summary>
@@ -412,6 +577,8 @@ public class CanvasView : SKElement
     {
         base.OnMouseMove(e);
 
+        UpdatePointerPosition(e);
+
         if (_isPanning)
         {
             var current = e.GetPosition(this);
@@ -472,6 +639,32 @@ public class CanvasView : SKElement
             FinishStroke();
             ReleaseMouseCapture();
         }
+    }
+
+    /// <summary>補助表示のためにポインタ位置を覚える。表示が出ているときだけ描き直す。</summary>
+    private void UpdatePointerPosition(MouseEventArgs e)
+    {
+        var p = e.GetPosition(this);
+        float s = DpiScale;
+        _cursorScreen = new SKPoint((float)p.X * s, (float)p.Y * s);
+
+        if (_document is not null && (EyedropperActive || BrushCursorVisible) && !_isPanning)
+            InvalidateVisual();
+    }
+
+    protected override void OnMouseEnter(MouseEventArgs e)
+    {
+        base.OnMouseEnter(e);
+        UpdatePointerPosition(e);
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+
+        if (_cursorScreen is null) return;
+        _cursorScreen = null;
+        InvalidateVisual();
     }
 
     protected override void OnLostMouseCapture(MouseEventArgs e)

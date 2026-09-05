@@ -34,6 +34,15 @@ public partial class MainWindow : Window
 
     private AppSettings _settings = new();
 
+    /// <summary>ツールごとの太さ・不透明度。ペンを太くしても消しゴムは変わらないようにする。</summary>
+    private readonly Dictionary<BrushKind, ToolBrushState> _toolBrushes = new();
+
+    /// <summary>いま下部バーが表しているブラシ種別。塗りつぶしなどに切り替えても保持する。</summary>
+    private BrushKind _currentBrushKind = BrushKind.Pen;
+
+    /// <summary>使い方ウィンドウ。閉じるまで使い回す（何枚も開かないため）。</summary>
+    private HelpWindow? _helpWindow;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -57,8 +66,7 @@ public partial class MainWindow : Window
 
     private void ApplySettings(AppSettings settings)
     {
-        SizeSlider.Value = Math.Clamp(settings.BrushSize, SizeSlider.Minimum, SizeSlider.Maximum);
-        OpacitySlider.Value = Math.Clamp(settings.BrushOpacity * 100.0, 0, 100);
+        LoadToolBrushSettings(settings);
         ToleranceSlider.Value = Math.Clamp(settings.FillTolerance, ToleranceSlider.Minimum, ToleranceSlider.Maximum);
         FillExpandSlider.Value = Math.Clamp(settings.FillExpand, FillExpandSlider.Minimum, FillExpandSlider.Maximum);
 
@@ -69,6 +77,68 @@ public partial class MainWindow : Window
 
         RestoreWindowPlacement(settings);
         RefreshPresetBar();
+    }
+
+    /// <summary>
+    /// 設定からツールごとの太さ・不透明度を読み込む。
+    /// 古い設定ファイル（toolBrushes が無い）の場合は、共通だった値を3つとも引き継ぐ。
+    /// </summary>
+    private void LoadToolBrushSettings(AppSettings settings)
+    {
+        _toolBrushes.Clear();
+
+        foreach (BrushKind kind in Enum.GetValues<BrushKind>())
+        {
+            settings.ToolBrushes.TryGetValue(kind.ToString(), out var saved);
+
+            _toolBrushes[kind] = new ToolBrushState
+            {
+                Size = saved?.Size ?? settings.BrushSize,
+                Opacity = saved?.Opacity ?? settings.BrushOpacity
+            };
+        }
+
+        _currentBrushKind = BrushKind.Pen;
+        ApplyToolBrushToUi(BrushKind.Pen);
+    }
+
+    /// <summary>指定ツールの記憶値を下部バーとブラシへ反映する。</summary>
+    private void ApplyToolBrushToUi(BrushKind kind)
+    {
+        if (SizeSlider is null || OpacitySlider is null) return;
+        if (!_toolBrushes.TryGetValue(kind, out var state)) return;
+
+        SizeSlider.Value = Math.Clamp(state.Size, SizeSlider.Minimum, SizeSlider.Maximum);
+        OpacitySlider.Value = Math.Clamp(state.Opacity * 100.0, 0, 100);
+
+        // 値が変わらなかった場合は ValueChanged が来ないので、ここでも反映しておく
+        if (Canvas is not null)
+        {
+            Canvas.Brush.Size = (float)SizeSlider.Value;
+            Canvas.Brush.Opacity = (float)(OpacitySlider.Value / 100.0);
+        }
+    }
+
+    /// <summary>ブラシ系ツールへ切り替える。太さ・不透明度はそのツールの記憶値に戻す。</summary>
+    private void SwitchBrushKind(BrushKind kind)
+    {
+        if (Canvas is null) return;
+
+        Canvas.Brush.Kind = kind;
+        if (_currentBrushKind == kind) return;
+
+        _currentBrushKind = kind;
+        ApplyToolBrushToUi(kind);
+    }
+
+    /// <summary>下部バーの値を、いま選んでいるブラシ種別の記憶へ書き戻す。</summary>
+    private void RememberCurrentBrush()
+    {
+        if (SizeSlider is null || OpacitySlider is null) return;
+        if (!_toolBrushes.TryGetValue(_currentBrushKind, out var state)) return;
+
+        state.Size = (float)SizeSlider.Value;
+        state.Opacity = (float)(OpacitySlider.Value / 100.0);
     }
 
     private void RestoreWindowPlacement(AppSettings settings)
@@ -99,6 +169,13 @@ public partial class MainWindow : Window
 
     private void CaptureSettings()
     {
+        RememberCurrentBrush();
+
+        _settings.ToolBrushes = _toolBrushes.ToDictionary(
+            pair => pair.Key.ToString(),
+            pair => new ToolBrushState { Size = pair.Value.Size, Opacity = pair.Value.Opacity });
+
+        // 古い版で読んでも困らないよう、共通の項目も現在値で残しておく
         _settings.BrushSize = (float)SizeSlider.Value;
         _settings.BrushOpacity = (float)(OpacitySlider.Value / 100.0);
         _settings.BrushColor = ColorUtil.ToHex(Canvas.Brush.Color);
@@ -139,18 +216,19 @@ public partial class MainWindow : Window
 
     private void ApplyPreset(BrushPreset preset)
     {
-        SizeSlider.Value = Math.Clamp(preset.Size, SizeSlider.Minimum, SizeSlider.Maximum);
-        OpacitySlider.Value = Math.Clamp(preset.Opacity * 100.0, 0, 100);
-
-        if (ColorUtil.TryParseHex(preset.Color, out var color))
-            ApplyBrushColor(color);
-
+        // ツールを先に切り替える。あとにすると、そのツールの記憶値で上書きされてしまう
         SelectTool(preset.Kind switch
         {
             "Pencil" => "Pencil",
             "Eraser" => "Eraser",
             _ => "Pen"
         });
+
+        SizeSlider.Value = Math.Clamp(preset.Size, SizeSlider.Minimum, SizeSlider.Maximum);
+        OpacitySlider.Value = Math.Clamp(preset.Opacity * 100.0, 0, 100);
+
+        if (ColorUtil.TryParseHex(preset.Color, out var color))
+            ApplyBrushColor(color);
     }
 
     private void RefreshPresetBar()
@@ -466,6 +544,24 @@ public partial class MainWindow : Window
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Close();
 
+    // ===== ヘルプ =====
+
+    private void OnHelpClick(object sender, RoutedEventArgs e) => ShowHelp();
+
+    /// <summary>使い方ウィンドウを開く。描きながら見られるよう、モーダルにはしない。</summary>
+    private void ShowHelp()
+    {
+        if (_helpWindow is not null)
+        {
+            _helpWindow.Activate();
+            return;
+        }
+
+        _helpWindow = new HelpWindow { Owner = this };
+        _helpWindow.Closed += (_, _) => _helpWindow = null;
+        _helpWindow.Show();
+    }
+
     // ===== 表示 =====
 
     private void OnZoomInClick(object sender, RoutedEventArgs e) => Canvas.ZoomByStep(1.25f);
@@ -484,6 +580,9 @@ public partial class MainWindow : Window
     {
         // Canvas は InitializeComponent 中の IsChecked 設定でも呼ばれ得るので防御する
         if (Canvas is null) return;
+
+        // 切り替える前に、いまの太さ・不透明度をそのツールの記憶へ残す
+        RememberCurrentBrush();
 
         // 別のツールへ移るときは、変形中なら確定してから移る
         if (tag != "Transform" && Canvas.IsTransforming)
@@ -524,15 +623,18 @@ public partial class MainWindow : Window
         switch (tag)
         {
             case "Pen":
-                Canvas.Brush.Kind = BrushKind.Pen;
+                SwitchBrushKind(BrushKind.Pen);
                 break;
             case "Pencil":
-                Canvas.Brush.Kind = BrushKind.Pencil;
+                SwitchBrushKind(BrushKind.Pencil);
                 break;
             case "Eraser":
-                Canvas.Brush.Kind = BrushKind.Eraser;
+                SwitchBrushKind(BrushKind.Eraser);
                 break;
         }
+
+        // 太さの丸カーソルは、実際に描くツールのときだけ出す
+        Canvas.BrushCursorVisible = tag is "Pen" or "Pencil" or "Eraser";
     }
 
     /// <summary>キーボードからツールを切り替える。ボタンの選択状態も合わせる。</summary>
@@ -583,8 +685,12 @@ public partial class MainWindow : Window
     private void UpdateHistoryMenu()
     {
         if (UndoMenuItem is null || RedoMenuItem is null) return;
+
         UndoMenuItem.IsEnabled = _history.CanUndo;
         RedoMenuItem.IsEnabled = _history.CanRedo;
+
+        if (UndoButton is not null) UndoButton.IsEnabled = _history.CanUndo;
+        if (RedoButton is not null) RedoButton.IsEnabled = _history.CanRedo;
     }
 
     // ===== 選択範囲 =====
@@ -752,6 +858,9 @@ public partial class MainWindow : Window
 
         Canvas.Brush.Size = (float)e.NewValue;
         SizeValueText.Text = ((int)e.NewValue).ToString();
+
+        if (_toolBrushes.TryGetValue(_currentBrushKind, out var state))
+            state.Size = (float)e.NewValue;
     }
 
     private void OnOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -760,6 +869,9 @@ public partial class MainWindow : Window
 
         Canvas.Brush.Opacity = (float)(e.NewValue / 100.0);
         OpacityValueText.Text = $"{(int)e.NewValue}%";
+
+        if (_toolBrushes.TryGetValue(_currentBrushKind, out var state))
+            state.Opacity = (float)(e.NewValue / 100.0);
     }
 
     private void OnToleranceChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -869,6 +981,8 @@ public partial class MainWindow : Window
                 return;
 
             case Key.T: SelectTool("Transform"); e.Handled = true; return;
+
+            case Key.F1: ShowHelp(); e.Handled = true; return;
 
             case Key.Enter:
                 if (Canvas.IsTransforming) { Canvas.CommitTransform(); e.Handled = true; }

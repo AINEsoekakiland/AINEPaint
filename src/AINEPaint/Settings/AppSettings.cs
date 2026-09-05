@@ -29,6 +29,13 @@ public sealed class AppSettings
     [JsonPropertyName("fillExpand")]
     public int FillExpand { get; set; } = 1;
 
+    /// <summary>
+    /// ツールごとの太さ・不透明度。キーは "Pen" / "Pencil" / "Eraser"。
+    /// 古い settings.json には無いので、その場合は brushSize / brushOpacity から引き継ぐ。
+    /// </summary>
+    [JsonPropertyName("toolBrushes")]
+    public Dictionary<string, ToolBrushState> ToolBrushes { get; set; } = new();
+
     [JsonPropertyName("presets")]
     public List<BrushPreset> Presets { get; set; } = new();
 
