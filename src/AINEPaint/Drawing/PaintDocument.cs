@@ -248,6 +248,30 @@ public sealed class PaintDocument : IDisposable
     }
 
     /// <summary>指定座標の合成後の色を求める。スポイト用。</summary>
+    /// <summary>
+    /// その画素に一番手前で色を置いているレイヤーを返す。
+    /// スポイトで「どのレイヤーから取ったか」を出すために使う。
+    /// どのレイヤーも置いていなければ null（＝背景の色を拾ったということ）。
+    /// </summary>
+    public Layer? SampleTopLayer(int x, int y)
+    {
+        if (x < 0 || y < 0 || x >= Width || y >= Height) return null;
+
+        // ごく薄いアンチエイリアスの縁を拾って誤解を招かないよう、下限を設ける
+        const float MinAlpha = 0.04f;
+
+        for (int i = _layers.Count - 1; i >= 0; i--)
+        {
+            var layer = _layers[i];
+            if (!layer.IsVisible || layer.AlphaByte == 0) continue;
+
+            float alpha = layer.Bitmap.GetPixel(x, y).Alpha / 255f * layer.Opacity;
+            if (alpha >= MinAlpha) return layer;
+        }
+
+        return null;
+    }
+
     public SKColor SamplePixel(int x, int y)
     {
         if (x < 0 || y < 0 || x >= Width || y >= Height) return SKColors.Transparent;

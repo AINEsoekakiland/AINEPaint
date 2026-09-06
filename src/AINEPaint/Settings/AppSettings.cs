@@ -23,6 +23,17 @@ public sealed class AppSettings
     [JsonPropertyName("brushColor")]
     public string BrushColor { get; set; } = "#000000";
 
+    /// <summary>
+    /// ペン先ごとの調整値。キーは BrushKind の名前。
+    /// 既定値から変えたものだけが入る。
+    /// </summary>
+    [JsonPropertyName("tipSettings")]
+    public Dictionary<string, TipOverride> TipSettings { get; set; } = new();
+
+    /// <summary>ペンツールで最後に使っていたペン先の名前。</summary>
+    [JsonPropertyName("penTip")]
+    public string PenTip { get; set; } = "Pen";
+
     [JsonPropertyName("usePressure")]
     public bool UsePressure { get; set; } = true;
 

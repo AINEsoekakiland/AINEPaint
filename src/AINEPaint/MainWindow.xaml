@@ -109,10 +109,12 @@
                     BorderThickness="0,0,1,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="ToolPanel" Margin="0,8">
-                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
+                    <RadioButton x:Name="PenToolButton"
+                                 GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="Pen" IsChecked="True" Checked="OnToolChecked"
+                                 PreviewMouseLeftButtonDown="OnPenButtonPressed"
                                  Content="{StaticResource Icon_pen}"
-                                 ToolTip="ペン (P)" />
+                                 ToolTip="ペン (P)　押すとペン先を選べます" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="Pencil" Checked="OnToolChecked"
                                  Content="{StaticResource Icon_pencil}"
@@ -150,6 +152,23 @@
 
             <Grid Grid.Column="1">
                 <drawing:CanvasView x:Name="Canvas" />
+                <Border x:Name="ActiveLayerBadge"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="10" Padding="10,4"
+                        Background="#CC202024" CornerRadius="4"
+                        BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
+                        IsHitTestVisible="False" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="4" Margin="0,1,8,1" CornerRadius="2"
+                                Background="{StaticResource AccentBrush}" />
+                        <TextBlock x:Name="ActiveLayerText" Text="" FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="ActiveLayerHidden" Text="（非表示）" FontSize="12"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="#FFB454" Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
                 <TextBlock x:Name="EmptyHint"
                            Text="ファイル → 新規キャンバス（Ctrl+N）でキャンバスを作成してください"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -276,5 +295,70 @@
                 </StackPanel>
             </DockPanel>
         </Border>
+
+        <!-- ===== ペン先の選択（ペンボタンの右に出る） ===== -->
+        <Popup x:Name="TipPopup"
+               PlacementTarget="{Binding ElementName=PenToolButton}"
+               Placement="Right" HorizontalOffset="6" VerticalOffset="-8"
+               StaysOpen="True" AllowsTransparency="True">
+            <Border Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
+                    CornerRadius="6" Padding="12" Margin="0,0,10,10">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.5" Color="Black" />
+                </Border.Effect>
+
+                <StackPanel Width="252">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="✕" Width="24" Height="24"
+                                Padding="0" Foreground="#1E1E1E" Cursor="Hand"
+                                Click="OnTipCloseClick" ToolTip="閉じる" />
+                        <TextBlock Text="ペン先" FontSize="14" FontWeight="Bold"
+                                   VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <StackPanel x:Name="TipList" Margin="0,8,0,0" />
+
+                    <Border Height="1" Margin="0,10"
+                            Background="{StaticResource BorderBrush2}" />
+
+                    <TextBlock x:Name="TipSettingsTitle" Text="設定" FontSize="12"
+                               Opacity="0.7" Margin="2,0,0,4" />
+
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock x:Name="TipPressureText" DockPanel.Dock="Right" Text="100"
+                                   Width="30" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+                        <TextBlock Text="筆圧の効き" FontSize="12" Width="72" />
+                        <Slider x:Name="TipPressureSlider" Minimum="0" Maximum="100"
+                                IsMoveToPointEnabled="True" IsSnapToTickEnabled="True" TickFrequency="1"
+                                VerticalAlignment="Center" ValueChanged="OnTipSettingChanged"
+                                ToolTip="0 にすると太さが一定になります" />
+                    </DockPanel>
+
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock x:Name="TipOpacityText" DockPanel.Dock="Right" Text="100"
+                                   Width="30" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+                        <TextBlock Text="濃さ" FontSize="12" Width="72" />
+                        <Slider x:Name="TipOpacitySlider" Minimum="5" Maximum="100"
+                                IsMoveToPointEnabled="True" IsSnapToTickEnabled="True" TickFrequency="1"
+                                VerticalAlignment="Center" ValueChanged="OnTipSettingChanged"
+                                ToolTip="ペン先そのものの透け具合です" />
+                    </DockPanel>
+
+                    <DockPanel Margin="0,4,0,0">
+                        <TextBlock x:Name="TipGrainText" DockPanel.Dock="Right" Text="0"
+                                   Width="30" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+                        <TextBlock Text="ざらつき" FontSize="12" Width="72" />
+                        <Slider x:Name="TipGrainSlider" Minimum="0" Maximum="100"
+                                IsMoveToPointEnabled="True" IsSnapToTickEnabled="True" TickFrequency="1"
+                                VerticalAlignment="Center" ValueChanged="OnTipSettingChanged"
+                                ToolTip="紙に描いたようなざらつきが入ります" />
+                    </DockPanel>
+
+                    <Button Content="このペン先を元に戻す" Height="28" Margin="0,10,0,0"
+                            Foreground="#1E1E1E" Cursor="Hand" Click="OnTipResetClick" />
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

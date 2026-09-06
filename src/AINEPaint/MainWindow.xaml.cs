@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using AINEPaint.Brushes;
 using AINEPaint.Color;
 using AINEPaint.Drawing;
@@ -15,6 +16,7 @@ using AINEPaint.Settings;
 using AINEPaint.Views;
 using Microsoft.Win32;
 using SkiaSharp;
+using SkiaSharp.Views.WPF;
 
 namespace AINEPaint;
 
@@ -46,6 +48,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        BuildTipList();
 
         Canvas.ViewStateChanged += UpdateStatus;
         Canvas.ColorPicked += ApplyBrushColor;
@@ -69,6 +72,22 @@ public partial class MainWindow : Window
         LoadToolBrushSettings(settings);
         ToleranceSlider.Value = Math.Clamp(settings.FillTolerance, ToleranceSlider.Minimum, ToleranceSlider.Maximum);
         FillExpandSlider.Value = Math.Clamp(settings.FillExpand, FillExpandSlider.Minimum, FillExpandSlider.Maximum);
+
+        _tipOverrides.Clear();
+        foreach (var (name, over) in settings.TipSettings)
+        {
+            if (Enum.TryParse<BrushKind>(name, out var k) && over is not null && !over.IsEmpty)
+                _tipOverrides[k] = over;
+        }
+
+        _lastPenTip = Enum.TryParse<BrushKind>(settings.PenTip, out var tip) && BrushSettings.IsPenTip(tip)
+            ? tip
+            : BrushKind.Pen;
+
+        SyncTipButtons(_lastPenTip);
+        SwitchBrushKind(_lastPenTip);
+        LoadTipSliders(_lastPenTip);
+        RefreshTipSamples();
 
         PressureCheck.IsChecked = settings.UsePressure;
         Canvas.Brush.UsePressure = settings.UsePressure;
@@ -120,6 +139,224 @@ public partial class MainWindow : Window
             Canvas.Brush.Size = (float)SizeSlider.Value;
             Canvas.Brush.Opacity = (float)(OpacitySlider.Value / 100.0);
         }
+    }
+
+    // ===== ペン先 =====
+
+    /// <summary>ポップアップに並べるペン先。順番はここで決まる。</summary>
+    private static readonly (BrushKind Kind, string Label, string Hint)[] TipCatalog =
+    {
+        (BrushKind.Pen,      "なめらか",   "標準のペン。迷ったらこれ"),
+        (BrushKind.GPen,     "Gペン",      "入り抜きが鋭い。線画向け"),
+        (BrushKind.Marker,   "マーカー",   "太さが一定で、少し透ける"),
+        (BrushKind.Brush,    "毛筆",       "筆圧と速さで太さが変わる"),
+        (BrushKind.Airbrush, "エアブラシ", "縁がぼける。重ねるほど濃くなる"),
+        (BrushKind.Crayon,   "クレヨン",   "ざらついた質感になる"),
+    };
+
+    private const int SampleWidth = 150;
+    private const int SampleHeight = 30;
+
+    /// <summary>ペンツールで最後に使っていたペン先。ペンに戻ったときここへ復帰する。</summary>
+    private BrushKind _lastPenTip = BrushKind.Pen;
+
+    /// <summary>ペン先ごとの調整値。既定値から変えたものだけが入る。</summary>
+    private readonly Dictionary<BrushKind, TipOverride> _tipOverrides = new();
+
+    /// <summary>スライダーの読み込みと保存が互いを呼び合わないようにするための番人。</summary>
+    private bool _syncingTips;
+
+    /// <summary>ポップアップの中身をコードで組み立てる。見本の画像を差し替えたいため。</summary>
+    private void BuildTipList()
+    {
+        foreach (var (kind, label, hint) in TipCatalog)
+        {
+            var image = new Image
+            {
+                Width = 112,
+                Height = 22,
+                Stretch = Stretch.Fill,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(image);
+            row.Children.Add(new TextBlock
+            {
+                Text = label,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            var button = new RadioButton
+            {
+                GroupName = "Tips",
+                Tag = kind.ToString(),
+                Content = row,
+                ToolTip = hint,
+                Style = (Style)FindResource("TipButtonStyle")
+            };
+            button.Checked += OnTipChecked;
+
+            TipList.Children.Add(button);
+        }
+    }
+
+    /// <summary>見本を描き直す。調整値を変えたときと、起動時に呼ぶ。</summary>
+    private void RefreshTipSamples()
+    {
+        if (TipList is null) return;
+
+        var ink = new SKColor(0xE8, 0xE8, 0xE8);
+
+        for (int i = 0; i < TipCatalog.Length && i < TipList.Children.Count; i++)
+        {
+            if (TipList.Children[i] is not RadioButton { Content: StackPanel row }) continue;
+            if (row.Children.Count == 0 || row.Children[0] is not Image image) continue;
+
+            var kind = TipCatalog[i].Kind;
+            _tipOverrides.TryGetValue(kind, out var over);
+
+            using var bitmap = StrokeSample.Render(
+                kind, SampleWidth, SampleHeight, ink,
+                over?.Pressure, over?.Opacity, over?.Grain);
+
+            var source = bitmap.ToWriteableBitmap();
+            source.Freeze();
+            image.Source = source;
+        }
+    }
+
+    /// <summary>ペン先ボタンが押されたとき。</summary>
+    private void OnTipChecked(object sender, RoutedEventArgs e)
+    {
+        if (Canvas is null) return;
+        if (sender is not RadioButton { Tag: string tag }) return;
+        if (!Enum.TryParse<BrushKind>(tag, out var kind)) return;
+
+        _lastPenTip = kind;
+        SwitchBrushKind(kind);
+        LoadTipSliders(kind);
+    }
+
+    /// <summary>ペン先ボタンの選択状態を、いまのブラシ種別に合わせる。</summary>
+    private void SyncTipButtons(BrushKind kind)
+    {
+        if (TipList is null) return;
+
+        foreach (var child in TipList.Children)
+        {
+            if (child is RadioButton { Tag: string tag } button)
+                button.IsChecked = tag == kind.ToString();
+        }
+    }
+
+    /// <summary>選んでいるペン先の調整値をスライダーへ読み込む。</summary>
+    private void LoadTipSliders(BrushKind kind)
+    {
+        if (!TipControlsReady) return;
+
+        _tipOverrides.TryGetValue(kind, out var over);
+        var profile = TipProfile.For(kind).With(over?.Pressure, over?.Opacity, over?.Grain);
+
+        _syncingTips = true;
+        try
+        {
+            TipSettingsTitle.Text = $"{LabelFor(kind)} の設定";
+            TipPressureSlider.Value = Math.Round(profile.PressureAmount * 100.0);
+            TipOpacitySlider.Value = Math.Round(profile.OpacityScale * 100.0);
+            TipGrainSlider.Value = Math.Round(profile.Grain * 100.0);
+        }
+        finally
+        {
+            _syncingTips = false;
+        }
+
+        UpdateTipValueTexts();
+        ApplyTipToBrush(kind);
+    }
+
+    private static string LabelFor(BrushKind kind)
+    {
+        foreach (var entry in TipCatalog)
+            if (entry.Kind == kind) return entry.Label;
+
+        return kind.ToString();
+    }
+
+    /// <summary>
+    /// ペン先の設定まわりの部品が全部そろっているか。
+    /// XAML を読み込んでいる途中にも ValueChanged が飛んでくるので、
+    /// そのときはまだ下の方の部品が null になっている。
+    /// </summary>
+    private bool TipControlsReady =>
+        TipPressureSlider is not null && TipOpacitySlider is not null && TipGrainSlider is not null
+        && TipPressureText is not null && TipOpacityText is not null && TipGrainText is not null
+        && TipSettingsTitle is not null;
+
+    private void UpdateTipValueTexts()
+    {
+        if (!TipControlsReady) return;
+
+        TipPressureText.Text = ((int)TipPressureSlider.Value).ToString();
+        TipOpacityText.Text = ((int)TipOpacitySlider.Value).ToString();
+        TipGrainText.Text = ((int)TipGrainSlider.Value).ToString();
+    }
+
+    /// <summary>いまのペン先の調整値を、実際に描くブラシへ渡す。</summary>
+    private void ApplyTipToBrush(BrushKind kind)
+    {
+        if (Canvas is null) return;
+
+        _tipOverrides.TryGetValue(kind, out var over);
+        Canvas.Brush.TipPressure = over?.Pressure;
+        Canvas.Brush.TipOpacity = over?.Opacity;
+        Canvas.Brush.TipGrain = over?.Grain;
+    }
+
+    private void OnTipSettingChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_syncingTips || Canvas is null || !TipControlsReady) return;
+
+        var kind = _lastPenTip;
+        var basis = TipProfile.For(kind);
+
+        float pressure = (float)(TipPressureSlider.Value / 100.0);
+        float opacity = (float)(TipOpacitySlider.Value / 100.0);
+        float grain = (float)(TipGrainSlider.Value / 100.0);
+
+        // 既定値と同じ値なら記録しない。設定ファイルを無駄に膨らませないため
+        var over = new TipOverride
+        {
+            Pressure = Near(pressure, basis.PressureAmount) ? null : pressure,
+            Opacity = Near(opacity, basis.OpacityScale) ? null : opacity,
+            Grain = Near(grain, basis.Grain) ? null : grain
+        };
+
+        if (over.IsEmpty) _tipOverrides.Remove(kind);
+        else _tipOverrides[kind] = over;
+
+        UpdateTipValueTexts();
+        ApplyTipToBrush(kind);
+        RefreshTipSamples();
+
+        static bool Near(float a, float b) => Math.Abs(a - b) < 0.005f;
+    }
+
+    private void OnTipResetClick(object sender, RoutedEventArgs e)
+    {
+        _tipOverrides.Remove(_lastPenTip);
+        LoadTipSliders(_lastPenTip);
+        RefreshTipSamples();
+    }
+
+    private void OnTipCloseClick(object sender, RoutedEventArgs e) => TipPopup.IsOpen = false;
+
+    /// <summary>ペンボタンを押したらペン先の選択を出す。選択済みのときに押しても開く。</summary>
+    private void OnPenButtonPressed(object sender, MouseButtonEventArgs e)
+    {
+        if (TipPopup is not null) TipPopup.IsOpen = true;
     }
 
     /// <summary>ブラシ系ツールへ切り替える。太さ・不透明度はそのツールの記憶値に戻す。</summary>
@@ -185,6 +422,8 @@ public partial class MainWindow : Window
         _settings.FillTolerance = (int)ToleranceSlider.Value;
         _settings.FillExpand = (int)FillExpandSlider.Value;
         _settings.UsePressure = PressureCheck.IsChecked == true;
+        _settings.PenTip = _lastPenTip.ToString();
+        _settings.TipSettings = _tipOverrides.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value);
 
         _settings.WindowMaximized = WindowState == WindowState.Maximized;
 
@@ -220,11 +459,16 @@ public partial class MainWindow : Window
 
     private void ApplyPreset(BrushPreset preset)
     {
+        var kind = Enum.TryParse<BrushKind>(preset.Kind, out var parsed) ? parsed : BrushKind.Pen;
+
         // ツールを先に切り替える。あとにすると、そのツールの記憶値で上書きされてしまう
-        SelectTool(preset.Kind switch
+        if (BrushSettings.IsPenTip(kind))
+            _lastPenTip = kind;
+
+        SelectTool(kind switch
         {
-            "Pencil" => "Pencil",
-            "Eraser" => "Eraser",
+            BrushKind.Pencil => "Pencil",
+            BrushKind.Eraser => "Eraser",
             _ => "Pen"
         });
 
@@ -627,7 +871,8 @@ public partial class MainWindow : Window
         switch (tag)
         {
             case "Pen":
-                SwitchBrushKind(BrushKind.Pen);
+                SwitchBrushKind(_lastPenTip);
+                SyncTipButtons(_lastPenTip);
                 break;
             case "Pencil":
                 SwitchBrushKind(BrushKind.Pencil);
@@ -639,6 +884,10 @@ public partial class MainWindow : Window
 
         // 太さの丸カーソルは、実際に描くツールのときだけ出す
         Canvas.BrushCursorVisible = tag is "Pen" or "Pencil" or "Eraser";
+
+        // ペン以外へ移ったらペン先の選択は閉じる
+        if (TipPopup is not null && tag != "Pen")
+            TipPopup.IsOpen = false;
     }
 
     /// <summary>キーボードからツールを切り替える。ボタンの選択状態も合わせる。</summary>
@@ -819,6 +1068,48 @@ public partial class MainWindow : Window
         UpdateLayerOpacityControl();
     }
 
+    private Layer? _badgeLayer;
+
+    private void OnBadgeLayerChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        => UpdateActiveLayerBadge();
+
+    /// <summary>
+    /// いま描けるレイヤーの名前をキャンバス左上に出す。
+    /// 別のレイヤーに描いてしまう事故を防ぐため。
+    /// </summary>
+    private void UpdateActiveLayerBadge()
+    {
+        if (ActiveLayerBadge is null || ActiveLayerText is null || ActiveLayerHidden is null) return;
+
+        if (_document?.ActiveLayer is not { } layer)
+        {
+            if (_badgeLayer is not null)
+            {
+                _badgeLayer.PropertyChanged -= OnBadgeLayerChanged;
+                _badgeLayer = null;
+            }
+
+            ActiveLayerBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // 名前や表示 / 非表示が変わったら追随できるよう、今のレイヤーを見張る
+        if (!ReferenceEquals(_badgeLayer, layer))
+        {
+            if (_badgeLayer is not null)
+                _badgeLayer.PropertyChanged -= OnBadgeLayerChanged;
+
+            _badgeLayer = layer;
+            _badgeLayer.PropertyChanged += OnBadgeLayerChanged;
+        }
+
+        ActiveLayerBadge.Visibility = Visibility.Visible;
+        ActiveLayerText.Text = layer.Name;
+
+        // 非表示のレイヤーに描くと、描いたものが画面に出ない。気づけるようにしておく。
+        ActiveLayerHidden.Visibility = layer.IsVisible ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private void UpdateLayerOpacityControl()
     {
         if (LayerOpacitySlider is null) return;
@@ -834,6 +1125,8 @@ public partial class MainWindow : Window
         {
             _syncingLayers = false;
         }
+
+        UpdateActiveLayerBadge();
     }
 
     // ===== 色 =====

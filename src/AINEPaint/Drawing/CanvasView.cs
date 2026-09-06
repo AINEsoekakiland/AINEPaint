@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using AINEPaint.Brushes;
+using AINEPaint.Layers;
 using AINEPaint.Selection;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
@@ -46,6 +47,19 @@ public class CanvasView : SKElement
 
     /// <summary>選択の縁の破線を流すためのタイマー。選択が無いときは止めておく。</summary>
     private readonly DispatcherTimer _antsTimer = new() { Interval = TimeSpan.FromMilliseconds(90) };
+
+    // ---- 長押しスポイト ----
+
+    /// <summary>この時間だけ押したまま動かさなければ、スポイトに切り替わる。</summary>
+    private static readonly TimeSpan LongPressDelay = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>これ以上動かしたら「描くつもり」と見なして長押しを取り消す（画面ピクセル）。</summary>
+    private const double LongPressSlop = 6.0;
+
+    private readonly DispatcherTimer _longPressTimer = new() { Interval = LongPressDelay };
+    private Point _pressOrigin;
+    private bool _tempEyedropper;
+    private SKTypeface? _labelTypeface;
     private float _antsPhase;
 
     public Viewport Viewport { get; } = new();
@@ -73,6 +87,9 @@ public class CanvasView : SKElement
     }
 
     private bool _eyedropperActive;
+
+    /// <summary>スポイトの表示を出すべきか。ツールとして選んでいる間と、長押し中。</summary>
+    private bool EyedropperShowing => EyedropperActive || _tempEyedropper;
 
     /// <summary>
     /// ブラシの太さを表す丸カーソルを出すかどうか。
@@ -153,6 +170,8 @@ public class CanvasView : SKElement
             InvalidateVisual();
             UpdateAntsTimer();
         };
+
+        _longPressTimer.Tick += (_, _) => BeginTemporaryEyedropper();
 
         _antsTimer.Tick += (_, _) =>
         {
@@ -290,7 +309,7 @@ public class CanvasView : SKElement
         if (_document is null || _isPanning) return;
         if (_cursorScreen is not { } screen) return;
 
-        if (EyedropperActive)
+        if (EyedropperShowing)
         {
             DrawEyedropperLoupe(canvas, screen);
             return;
@@ -367,10 +386,9 @@ public class CanvasView : SKElement
         bool inside = px >= 0 && py >= 0 && px < _document.Width && py < _document.Height;
         if (!inside) return;
 
-        // カーソルの上に出す。画面の上端に収まらないときだけ下へ回す
+        // 拾う画素がちょうど真ん中に来るよう、カーソルの位置に重ねて出す
         float cx = screen.X;
-        float cy = screen.Y - (radius + LoupeGap * dpi);
-        if (cy - radius < 0) cy = screen.Y + (radius + LoupeGap * dpi);
+        float cy = screen.Y;
 
         var sample = _document.SamplePixel(px, py);
 
@@ -451,6 +469,59 @@ public class CanvasView : SKElement
             canvas.DrawCircle(cx, cy, radius, edge);
             canvas.DrawCircle(cx, cy, radius - ringWidth, edge);
         }
+
+        DrawSourceLayerLabel(canvas, cx, cy - radius - LoupeGap * 0.5f * dpi, px, py, dpi);
+    }
+
+    /// <summary>
+    /// 拡大鏡の上に、その色を置いているレイヤーの名前を出す。
+    /// 別のレイヤーの色を拾ってしまう間違いに、その場で気づけるようにするため。
+    /// </summary>
+    private void DrawSourceLayerLabel(SKCanvas canvas, float cx, float bottom, int px, int py, float dpi)
+    {
+        if (_document is null) return;
+
+        Layer? source = _document.SampleTopLayer(px, py);
+        string text = source?.Name
+                      ?? (_document.Background == CanvasBackground.White ? "背景" : "透明");
+
+        // レイヤー名に日本語が入るので、確実に出せる書体を選んでおく
+        _labelTypeface ??= SKFontManager.Default.MatchCharacter("ja", 'あ') ?? SKTypeface.Default;
+
+        using var textPaint = new SKPaint
+        {
+            Color = source is null ? new SKColor(0xB0, 0xB0, 0xB0) : SKColors.White,
+            TextSize = 12f * dpi,
+            IsAntialias = true,
+            TextAlign = SKTextAlign.Center,
+            Typeface = _labelTypeface
+        };
+
+        float padX = 8f * dpi;
+        float padY = 4f * dpi;
+        float width = textPaint.MeasureText(text) + padX * 2f;
+        float height = textPaint.TextSize + padY * 2f;
+
+        var box = new SKRect(cx - width * 0.5f, bottom - height, cx + width * 0.5f, bottom);
+
+        // 画面の上端に収まらないときは拡大鏡の下へ回す
+        if (box.Top < 0)
+        {
+            float shift = (LoupeRadius * 2f + LoupeGap) * dpi + height;
+            box = new SKRect(box.Left, box.Top + shift, box.Right, box.Bottom + shift);
+        }
+
+        using (var back = new SKPaint { Color = new SKColor(0x20, 0x20, 0x24, 0xE0), IsAntialias = true })
+            canvas.DrawRoundRect(box, 4f * dpi, 4f * dpi, back);
+
+        using (var edge = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke, StrokeWidth = 1f,
+            Color = new SKColor(0x00, 0x00, 0x00, 0x80), IsAntialias = true
+        })
+            canvas.DrawRoundRect(box, 4f * dpi, 4f * dpi, edge);
+
+        canvas.DrawText(text, cx, box.Bottom - padY - textPaint.FontMetrics.Descent, textPaint);
     }
 
     /// <summary>変形中の枠とハンドル。すべて画面座標で描くので、拡大しても大きさが変わらない。</summary>
@@ -625,6 +696,10 @@ public class CanvasView : SKElement
             _isDrawing = true;
             _stroke.Begin(target.Bitmap, Brush, ToStrokePoint(e), Selection.Path);
             CaptureMouse();
+
+            // 押したまま動かさなければスポイトに変わる。動かしたら普通に描く。
+            _pressOrigin = e.GetPosition(this);
+            _longPressTimer.Start();
             InvalidateVisual();
             e.Handled = true;
         }
@@ -656,6 +731,20 @@ public class CanvasView : SKElement
         {
             UpdateSelection(e);
             return;
+        }
+
+        if (_tempEyedropper)
+        {
+            InvalidateVisual();   // 拡大鏡がカーソルに追随する
+            return;
+        }
+
+        if (_longPressTimer.IsEnabled)
+        {
+            var now = e.GetPosition(this);
+            if (Math.Abs(now.X - _pressOrigin.X) > LongPressSlop ||
+                Math.Abs(now.Y - _pressOrigin.Y) > LongPressSlop)
+                _longPressTimer.Stop();
         }
 
         if (_isDrawing && e.LeftButton == MouseButtonState.Pressed)
@@ -690,6 +779,16 @@ public class CanvasView : SKElement
             ReleaseMouseCapture();
             return;
         }
+
+        if (e.ChangedButton == MouseButton.Left && _tempEyedropper)
+        {
+            PickColorAt(e);
+            EndTemporaryEyedropper();
+            ReleaseMouseCapture();
+            return;
+        }
+
+        _longPressTimer.Stop();
 
         if (_isDrawing && e.ChangedButton == MouseButton.Left)
         {
@@ -727,8 +826,37 @@ public class CanvasView : SKElement
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
+
+        _longPressTimer.Stop();
+        EndTemporaryEyedropper();
+
         // 何らかの理由でキャプチャが外れた場合も、描いた分は捨てずに確定させる
         FinishStroke();
+    }
+
+    /// <summary>
+    /// 長押しで一時的にスポイトへ切り替える。
+    /// すでに置き始めていた点は捨てる。履歴はストロークを離した時にしか積まないので、
+    /// ここで捨てても「元に戻す」には何も残らない。
+    /// </summary>
+    private void BeginTemporaryEyedropper()
+    {
+        _longPressTimer.Stop();
+
+        if (!_isDrawing || _tempEyedropper) return;
+
+        _isDrawing = false;
+        _stroke.Cancel();
+        _tempEyedropper = true;
+        InvalidateVisual();
+    }
+
+    private void EndTemporaryEyedropper()
+    {
+        if (!_tempEyedropper) return;
+
+        _tempEyedropper = false;
+        InvalidateVisual();
     }
 
     private void FinishStroke()

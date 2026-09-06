@@ -45,6 +45,7 @@
 
                 <TextBlock Style="{StaticResource H}" Text="ツール（左側のボタン）" />
                 <TextBlock Style="{StaticResource P}" Text="ペン (P)　なめらかな線を描きます。ペンタブレットなら筆圧で太さが変わります。" />
+                <TextBlock Style="{StaticResource Note}" Text="ペンのボタンを押すと、すぐ右にペン先の一覧が出ます。線の見本が付いているので、描く前に選べます。閉じるときは右上の ✕ を押してください。太さと不透明度はペン先ごとに別々に覚えます。" />
                 <TextBlock Style="{StaticResource P}" Text="鉛筆 (N)　ペンより少し薄い線を描きます。" />
                 <TextBlock Style="{StaticResource P}" Text="消しゴム (E)　選んでいるレイヤーだけを消します。下のレイヤーは消えません。" />
                 <TextBlock Style="{StaticResource P}" Text="塗りつぶし (G)　クリックした場所とつながっている、色の近い範囲を塗ります。" />
@@ -52,7 +53,17 @@
                 <TextBlock Style="{StaticResource P}" Text="長方形で選択 (M) / なげなわで選択 (L)　範囲を選びます。何もない所をクリックすると選択が消えます。" />
                 <TextBlock Style="{StaticResource P}" Text="変形 (T)　選んだ範囲を動かす・大きさを変える・回します。四隅をドラッグで拡大縮小、上の丸で回転。Enter で確定、Esc で取り消し。" />
                 <TextBlock Style="{StaticResource P}" Text="移動 (H)　画面をドラッグしてスクロールします。スペースキーを押しながらドラッグ、マウスの中ボタンドラッグでも同じことができます。" />
-                <TextBlock Style="{StaticResource P}" Text="スポイト (I)　クリックした場所の色を描画色にします。カーソルの上に拡大した丸が出るので、拾いたい色に合わせてください。" />
+                <TextBlock Style="{StaticResource P}" Text="スポイト (I)　クリックした場所の色を描画色にします。拡大した丸が出るので、拾いたい色に合わせてください。丸の上には、その色を置いているレイヤーの名前が出ます。" />
+                <TextBlock Style="{StaticResource Note}" Text="ペンや鉛筆のまま、動かさずに少し長く押すとスポイトに変わります。そのまま動かして位置を決め、離すと色が決まります。描くのをやめたくなったら、そのまま押し続けてください。" />
+
+                <TextBlock Style="{StaticResource H}" Text="ペン先の使い分け" />
+                <TextBlock Style="{StaticResource P}" Text="なめらか　標準。迷ったらこれ。" />
+                <TextBlock Style="{StaticResource P}" Text="Gペン　入り抜きが鋭くなります。線画やペン入れに。" />
+                <TextBlock Style="{StaticResource P}" Text="マーカー　筆圧に関係なく太さが一定です。少し透けるので、重ねると濃くなります。" />
+                <TextBlock Style="{StaticResource P}" Text="毛筆　筆圧に加えて、速く動かすほど細くなります。勢いのある線に。" />
+                <TextBlock Style="{StaticResource P}" Text="エアブラシ　縁がぼけます。同じ場所を何度も通ると濃くなります。影や頬の赤みに。" />
+                <TextBlock Style="{StaticResource P}" Text="クレヨン　ざらついた線になります。紙に描いたような質感に。" />
+                <TextBlock Style="{StaticResource Note}" Text="一覧の下にある「筆圧の効き」「濃さ」「ざらつき」で、ペン先そのものの性格を変えられます。見本もその場で変わります。元に戻したいときは「このペン先を元に戻す」を押してください。" />
 
                 <TextBlock Style="{StaticResource H}" Text="太さ・不透明度・色（下のバー）" />
                 <TextBlock Style="{StaticResource P}" Text="バーはどこをクリックしても、その位置の値にすぐ変わります。" />

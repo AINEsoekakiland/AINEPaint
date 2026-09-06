@@ -8,7 +8,7 @@ public sealed class BrushPreset
     [JsonPropertyName("name")]
     public string Name { get; set; } = "ブラシ";
 
-    /// <summary>"Pen" / "Pencil" / "Eraser"</summary>
+    /// <summary>BrushKind の名前（"Pen" / "GPen" / "Marker" / "Brush" / "Airbrush" / "Crayon" / "Pencil" / "Eraser"）。</summary>
     [JsonPropertyName("kind")]
     public string Kind { get; set; } = "Pen";
 

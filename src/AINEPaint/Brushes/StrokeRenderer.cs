@@ -34,6 +34,12 @@ public sealed class StrokeRenderer : IDisposable
     private BrushSettings? _settings;
     private SKPath? _clip;
 
+    private TipProfile _tip = TipProfile.For(BrushKind.Pen);
+    private SKMaskFilter? _blur;
+    private float _blurWidth = -1f;
+    private float _speedFactor = 1f;
+    private readonly Random _random = new();
+
     private StrokePoint _previous;
     private SKPoint _lastMid;
     private float _lastWidth;
@@ -64,16 +70,20 @@ public sealed class StrokeRenderer : IDisposable
 
         _target = target;
         _settings = settings;
-        _paint = CreateStrokePaint(settings);
+        _tip = TipProfile.Resolve(settings);
+        _speedFactor = 1f;
+        _blurWidth = -1f;
+        _paint = CreateStrokePaint(settings, _tip);
         _previous = start;
         _lastMid = new SKPoint(start.X, start.Y);
         _hasSegment = false;
         _smoothPressure = Math.Clamp(start.Pressure, 0.01f, 1f);
-        _lastWidth = WidthFor(settings, _smoothPressure);
+        _lastWidth = WidthFor(settings, _tip, _smoothPressure, 1f);
         DirtyRect = SKRect.Empty;
 
         // 置いた瞬間に点が残るように、丸を1つ打つ
         float radius = _lastWidth * 0.5f;
+        ApplyBlur(_lastWidth);
         _bufferCanvas.DrawCircle(start.X, start.Y, radius, _paint);
         Expand(new SKRect(start.X - radius, start.Y - radius, start.X + radius, start.Y + radius), 2f);
     }
@@ -91,7 +101,16 @@ public sealed class StrokeRenderer : IDisposable
 
         // 筆圧の生値は1点ごとに細かく揺れる。そのまま太さにすると線がガタつく。
         _smoothPressure += (Math.Clamp(point.Pressure, 0.01f, 1f) - _smoothPressure) * PressureSmoothing;
-        float width = WidthFor(settings, _smoothPressure);
+
+        // 毛筆用。速く動かすほど細くする。入力点の間隔を速さの代わりに使う。
+        if (_tip.UseSpeed)
+        {
+            float distance = MathF.Sqrt(dx * dx + dy * dy);
+            float target = Math.Clamp(1f - (distance - 3f) / 45f, 0.45f, 1f);
+            _speedFactor += (target - _speedFactor) * 0.3f;
+        }
+
+        float width = WidthFor(settings, _tip, _smoothPressure, _speedFactor);
 
         StampQuad(_lastMid, new SKPoint(_previous.X, _previous.Y), mid, _lastWidth, width);
 
@@ -140,9 +159,18 @@ public sealed class StrokeRenderer : IDisposable
     /// <summary>合成せずに破棄する（ウィンドウ外へ抜けた場合など）。</summary>
     public void Cancel()
     {
+        // 描いた分をバッファに残したまま捨てると、次のストロークに幽霊が出る。
+        // 次回の Begin で消せるよう、範囲を覚えておく。
+        if (!DirtyRect.IsEmpty)
+            _previousDirty = _previousDirty.IsEmpty ? DirtyRect : SKRect.Union(_previousDirty, DirtyRect);
+        DirtyRect = SKRect.Empty;
+
         _hasSegment = false;
         _paint?.Dispose();
         _paint = null;
+        _blur?.Dispose();
+        _blur = null;
+        _blurWidth = -1f;
         _settings = null;
         _target = null;
         _clip = null;
@@ -181,9 +209,6 @@ public sealed class StrokeRenderer : IDisposable
     /// <summary>筆圧の追従の速さ。小さいほど滑らかになるが、反応は鈍くなる。</summary>
     private const float PressureSmoothing = 0.35f;
 
-    /// <summary>円を並べる間隔。太さに対する割合。小さいほど滑らかで、そのぶん重い。</summary>
-    private const float StampSpacingRatio = 0.10f;
-
     /// <summary>1区間あたりの円の数の上限。拡大表示で極端に増えるのを防ぐ。</summary>
     private const int MaxStampsPerSegment = 512;
 
@@ -196,8 +221,12 @@ public sealed class StrokeRenderer : IDisposable
         if (_bufferCanvas is null || _paint is null) return;
 
         float length = Distance(p0, control) + Distance(control, p1);
-        float spacing = Math.Max(0.35f, Math.Max(w0, w1) * StampSpacingRatio);
+        float spacing = Math.Max(0.35f, Math.Max(w0, w1) * _tip.SpacingRatio);
         int steps = Math.Clamp((int)MathF.Ceiling(length / spacing), 1, MaxStampsPerSegment);
+
+        ApplyBlur((w0 + w1) * 0.5f);
+
+        byte baseAlpha = _paint.Color.Alpha;
 
         for (int i = 1; i <= steps; i++)
         {
@@ -208,8 +237,24 @@ public sealed class StrokeRenderer : IDisposable
             float y = u * u * p0.Y + 2f * u * t * control.Y + t * t * p1.Y;
             float radius = Math.Max(0.25f, (w0 + (w1 - w0) * t) * 0.5f);
 
+            if (_tip.Grain > 0f)
+            {
+                // 紙目のように、抜けと濃淡をわざと作る
+                if (_random.NextDouble() < _tip.Grain * 0.35) continue;
+
+                float jitter = radius * _tip.Grain * 0.35f;
+                x += (float)(_random.NextDouble() * 2.0 - 1.0) * jitter;
+                y += (float)(_random.NextDouble() * 2.0 - 1.0) * jitter;
+
+                float scale = 1f - (float)_random.NextDouble() * _tip.Grain * 0.7f;
+                _paint.Color = _paint.Color.WithAlpha((byte)Math.Clamp(baseAlpha * scale, 1f, 255f));
+            }
+
             _bufferCanvas.DrawCircle(x, y, radius, _paint);
         }
+
+        if (_tip.Grain > 0f)
+            _paint.Color = _paint.Color.WithAlpha(baseAlpha);
 
         float pad = Math.Max(w0, w1) * 0.5f + 2f;
         var bounds = new SKRect(
@@ -226,15 +271,33 @@ public sealed class StrokeRenderer : IDisposable
     }
 
     /// <summary>
-    /// 筆圧を線幅へ変換する。
-    /// そのまま比例させると軽く触れた部分が太く残って払いが鈍るので、
-    /// 弱い側をより細くする補正を掛けている。
+    /// 筆圧を線幅へ変換する。効き方はペン先ごとに違う。
+    /// PressureFloor が 1 なら筆圧を完全に無視して太さ一定になる（マーカー）。
     /// </summary>
-    private static float WidthFor(BrushSettings settings, float pressure)
+    private static float WidthFor(BrushSettings settings, TipProfile tip, float pressure, float speedFactor)
     {
         float p = Math.Clamp(pressure, 0.01f, 1f);
-        float curved = MathF.Pow(p, 1.4f);
-        return Math.Max(0.35f, settings.Size * curved);
+        float curved = MathF.Pow(p, tip.PressureExponent);
+        float scale = tip.PressureFloor + (1f - tip.PressureFloor) * curved;
+
+        return Math.Max(0.35f, settings.Size * scale * speedFactor);
+    }
+
+    /// <summary>エアブラシ用のぼかし。太さが変わったときだけ作り直す。</summary>
+    private void ApplyBlur(float width)
+    {
+        if (_paint is null) return;
+        if (_tip.BlurRatio <= 0f) return;
+
+        // 毎スタンプ作り直すと重いので、ある程度変わったときだけ
+        if (_blurWidth > 0f && MathF.Abs(width - _blurWidth) < Math.Max(0.5f, _blurWidth * 0.15f))
+            return;
+
+        _blurWidth = width;
+        _paint.MaskFilter = null;
+        _blur?.Dispose();
+        _blur = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, Math.Max(0.4f, width * _tip.BlurRatio));
+        _paint.MaskFilter = _blur;
     }
 
     private void Expand(SKRect rect, float padding)
@@ -245,29 +308,26 @@ public sealed class StrokeRenderer : IDisposable
     }
 
     /// <summary>バッファへ描くときの筆。常に不透明で描く。</summary>
-    private static SKPaint CreateStrokePaint(BrushSettings settings)
+    private static SKPaint CreateStrokePaint(BrushSettings settings, TipProfile tip)
     {
         var color = settings.Kind == BrushKind.Eraser
             ? SKColors.Black          // 消しゴムは形だけのマスクとして使う
             : settings.Color;
 
         // 円を並べて描くので Fill。線幅は使わない。
+        // StampAlpha が 255 未満のペン先は、同じストローク内で重ねると濃くなる（エアブラシ）。
         return new SKPaint
         {
             Style = SKPaintStyle.Fill,
             IsAntialias = true,
-            Color = color.WithAlpha(255)
+            Color = color.WithAlpha(tip.StampAlpha)
         };
     }
 
     /// <summary>バッファをドキュメントへ合成するときの筆。ここで初めて不透明度が掛かる。</summary>
     private static SKPaint CreateCompositePaint(BrushSettings settings)
     {
-        float opacity = Math.Clamp(settings.Opacity, 0f, 1f);
-
-        // 鉛筆はわずかに透ける
-        if (settings.Kind == BrushKind.Pencil)
-            opacity *= 0.75f;
+        float opacity = Math.Clamp(settings.Opacity, 0f, 1f) * TipProfile.Resolve(settings).OpacityScale;
 
         return new SKPaint
         {
