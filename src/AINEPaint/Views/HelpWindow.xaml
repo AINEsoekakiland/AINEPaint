@@ -48,7 +48,8 @@
                 <TextBlock Style="{StaticResource Note}" Text="ペンのボタンを押すと、すぐ右にペン先の一覧が出ます。線の見本が付いているので、描く前に選べます。閉じるときは右上の ✕ を押してください。太さと不透明度はペン先ごとに別々に覚えます。" />
                 <TextBlock Style="{StaticResource P}" Text="鉛筆 (N)　ペンより少し薄い線を描きます。" />
                 <TextBlock Style="{StaticResource P}" Text="消しゴム (E)　選んでいるレイヤーだけを消します。下のレイヤーは消えません。" />
-                <TextBlock Style="{StaticResource P}" Text="塗りつぶし (G)　クリックした場所とつながっている、色の近い範囲を塗ります。" />
+                <TextBlock Style="{StaticResource P}" Text="塗りつぶし (G)　クリックした場所とつながっている、色の近い範囲を塗ります。ボタンを押すとすぐ右に種類が出て、「色で塗る」と「透明にする」を選べます。" />
+                <TextBlock Style="{StaticResource Note}" Text="「透明にする」を選ぶと、押した場所の色をまとめて消せます。消しゴムで塗らなくても、背景だけ抜くことができます。" />
                 <TextBlock Style="{StaticResource Note}" Text="うまく塗れないときは、下のバーの「許容値」を大きくします。線の縁に白い隙間が残るときは「はみ出し」を大きくします。" />
                 <TextBlock Style="{StaticResource P}" Text="長方形で選択 (M) / なげなわで選択 (L)　範囲を選びます。何もない所をクリックすると選択が消えます。" />
                 <TextBlock Style="{StaticResource P}" Text="変形 (T)　選んだ範囲を動かす・大きさを変える・回します。四隅をドラッグで拡大縮小、上の丸で回転。Enter で確定、Esc で取り消し。" />
@@ -70,7 +71,8 @@
                 <TextBlock Style="{StaticResource P}" Text="太さは [ と ] キーでも変えられます。キャンバスの上ではカーソルが丸で表示され、その丸の大きさが今の太さです。" />
                 <TextBlock Style="{StaticResource P}" Text="太さと不透明度は、ペン・鉛筆・消しゴムでそれぞれ別に覚えます。消しゴムを太くしてもペンの太さは変わりません。" />
                 <TextBlock Style="{StaticResource P}" Text="「筆圧」のチェックを外すと、ペンタブレットでも太さが一定になります。線の太さを揃えたいときに使ってください。" />
-                <TextBlock Style="{StaticResource P}" Text="色は右下の四角いボタンから選びます。" />
+                <TextBlock Style="{StaticResource P}" Text="色は右下の四角いボタンから選びます。外側の輪で色あい、内側の四角で鮮やかさと明るさを決めます。赤・緑・青のバーを直接動かすこともできます。" />
+                <TextBlock Style="{StaticResource Note}" Text="「もと」と書かれた四角を押すと、開いたときの色に戻せます。下に並んでいる色はそのまま使えます。" />
 
                 <TextBlock Style="{StaticResource H}" Text="プリセット（上のバー）" />
                 <TextBlock Style="{StaticResource P}" Text="「＋ 今のブラシを登録」で、今の種類・太さ・不透明度・色をまとめて保存できます。" />
@@ -80,6 +82,13 @@
                 <TextBlock Style="{StaticResource P}" Text="＋ 追加　⧉ 複製　🗑 削除　↑ ↓ 並び替え" />
                 <TextBlock Style="{StaticResource P}" Text="チェックを外すと非表示になります。名前をダブルクリックすると名前を変えられます。" />
                 <TextBlock Style="{StaticResource P}" Text="一覧の上にあるものほど手前（上）に重なります。描けるのは選んでいる1枚だけです。" />
+                <TextBlock Style="{StaticResource P}" Text="「画像を取り込む」で、写真やイラストを新しいレイヤーとして読み込めます。何枚かまとめて選ぶこともできます。" />
+                <TextBlock Style="{StaticResource Note}" Text="ウィンドウに画像をドラッグしても取り込めます。キャンバスより大きい画像は、収まるように縮めて真ん中に置きます。" />
+
+                <TextBlock Style="{StaticResource H}" Text="背景を消す" />
+                <TextBlock Style="{StaticResource P}" Text="塗りつぶしの種類の下にある「背景を自動で消す」で、いま選んでいるレイヤーの背景をまとめて透明にできます。" />
+                <TextBlock Style="{StaticResource P}" Text="画像の四すみの色を背景とみなし、そこから繋がっている同じような色を消します。絵の内側にある同じ色は消えません。" />
+                <TextBlock Style="{StaticResource Note}" Text="白い紙や単色の背景に向いています。景色が写り込んだ写真はうまくいきません。消えすぎたり残ったりしたときは、Ctrl+Z で戻してから「消す範囲」を変えてやり直してください。" />
 
                 <TextBlock Style="{StaticResource H}" Text="元に戻す / やり直し" />
                 <TextBlock Style="{StaticResource P}" Text="上のバーの ↶ ↷ ボタン、または Ctrl+Z（戻る）／ Ctrl+Shift+Z・Ctrl+Y（すすむ）。" />

@@ -56,6 +56,9 @@ public sealed class BrushSettings
     /// <summary>塗りつぶしの色の許容差（0〜255）。大きいほど広い範囲が塗られる。</summary>
     public int FillTolerance { get; set; } = 24;
 
+    /// <summary>塗りつぶしで色を置くのではなく、その範囲を透明にするか。</summary>
+    public bool FillWithTransparent { get; set; }
+
     /// <summary>塗りつぶした範囲を外へ広げる量（ピクセル）。線の縁の隙間を埋める。</summary>
     public int FillExpand { get; set; } = 1;
 

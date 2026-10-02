@@ -89,6 +89,10 @@ public partial class MainWindow : Window
         LoadTipSliders(_lastPenTip);
         RefreshTipSamples();
 
+        FillEraseMode.IsChecked = settings.FillTransparent;
+        FillColorMode.IsChecked = !settings.FillTransparent;
+        Canvas.Brush.FillWithTransparent = settings.FillTransparent;
+
         PressureCheck.IsChecked = settings.UsePressure;
         Canvas.Brush.UsePressure = settings.UsePressure;
 
@@ -356,6 +360,7 @@ public partial class MainWindow : Window
     /// <summary>ペンボタンを押したらペン先の選択を出す。選択済みのときに押しても開く。</summary>
     private void OnPenButtonPressed(object sender, MouseButtonEventArgs e)
     {
+        if (FillPopup is not null) FillPopup.IsOpen = false;
         if (TipPopup is not null) TipPopup.IsOpen = true;
     }
 
@@ -423,6 +428,7 @@ public partial class MainWindow : Window
         _settings.FillExpand = (int)FillExpandSlider.Value;
         _settings.UsePressure = PressureCheck.IsChecked == true;
         _settings.PenTip = _lastPenTip.ToString();
+        _settings.FillTransparent = FillEraseMode.IsChecked == true;
         _settings.TipSettings = _tipOverrides.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value);
 
         _settings.WindowMaximized = WindowState == WindowState.Maximized;
@@ -641,6 +647,165 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowError("開けませんでした。", ex);
+        }
+    }
+
+    // ===== 画像の取り込み =====
+
+    /// <summary>画像として扱う拡張子。</summary>
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg" };
+
+    private static bool IsImagePath(string path)
+        => ImageExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
+
+    private static bool IsProjectPath(string path)
+        => string.Equals(Path.GetExtension(path), ProjectFile.Extension,
+                         StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>レイヤーパネルの取り込みボタン。</summary>
+    private void OnImportLayerClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null)
+        {
+            MessageBox.Show(this,
+                "先にキャンバスを作るか、画像を開いてください。",
+                "AINE Paint", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "画像をレイヤーとして取り込む",
+            Filter = ImageFile.OpenFilter,
+            Multiselect = true
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        foreach (var path in dialog.FileNames)
+            ImportImageAsLayer(path);
+    }
+
+    /// <summary>画像を1枚、新しいレイヤーとして取り込む。</summary>
+    private void ImportImageAsLayer(string path)
+    {
+        if (_document is null) return;
+
+        try
+        {
+            using var bitmap = SKBitmap.Decode(path)
+                ?? throw new InvalidDataException("画像として読み取れませんでした。");
+
+            _history.CaptureStructure(_document, "画像を取り込む");
+
+            string name = Path.GetFileNameWithoutExtension(path);
+            _document.AddImageLayer(bitmap, name);
+
+            MarkDirty();
+            RefreshLayerPanel();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"「{Path.GetFileName(path)}」を取り込めませんでした。", ex);
+        }
+    }
+
+    // ===== ドラッグ＆ドロップ =====
+
+    private void OnWindowDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = DroppedPaths(e).Count > 0 ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnWindowDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+
+        var paths = DroppedPaths(e);
+        if (paths.Count == 0) return;
+
+        Activate();
+
+        // プロジェクトファイルが混じっていたら、それを開く方を優先する。
+        // 開いている絵を捨てることになるので、確認を挟む。
+        var project = paths.FirstOrDefault(IsProjectPath);
+        if (project is not null)
+        {
+            if (!ConfirmDiscardChanges()) return;
+            OpenPath(project);
+            return;
+        }
+
+        // キャンバスが無いときは、1枚目を開いてキャンバスにする
+        int start = 0;
+        if (_document is null)
+        {
+            if (!ConfirmDiscardChanges()) return;
+            OpenPath(paths[0]);
+            start = 1;
+        }
+
+        for (int i = start; i < paths.Count; i++)
+            ImportImageAsLayer(paths[i]);
+    }
+
+    /// <summary>落とされたファイルのうち、扱えるものだけ。</summary>
+    private static List<string> DroppedPaths(DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return new List<string>();
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths) return new List<string>();
+
+        return paths
+            .Where(p => File.Exists(p) && (IsImagePath(p) || IsProjectPath(p)))
+            .ToList();
+    }
+
+    // ===== 塗りつぶしの種類 =====
+
+    private void OnFillModeChecked(object sender, RoutedEventArgs e)
+    {
+        if (Canvas is null || FillEraseMode is null) return;
+
+        Canvas.Brush.FillWithTransparent = FillEraseMode.IsChecked == true;
+    }
+
+    private void OnFillCloseClick(object sender, RoutedEventArgs e) => FillPopup.IsOpen = false;
+
+    /// <summary>塗りつぶしボタンを押したら種類の選択を出す。選択済みのときに押しても開く。</summary>
+    private void OnFillButtonPressed(object sender, MouseButtonEventArgs e)
+    {
+        if (TipPopup is not null) TipPopup.IsOpen = false;
+        if (FillPopup is not null) FillPopup.IsOpen = true;
+    }
+
+    // ===== 背景を消す =====
+
+    private void OnRemoveBackgroundClick(object sender, RoutedEventArgs e)
+    {
+        if (_document is null) return;
+
+        if (_document.ActiveLayer is null)
+        {
+            MessageBox.Show(this, "レイヤーを選んでください。",
+                "AINE Paint", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new RemoveBackgroundDialog(_settings.BackgroundTolerance) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        _settings.BackgroundTolerance = dialog.Tolerance;
+
+        FillPopup.IsOpen = false;
+
+        if (!Canvas.RemoveBackground(dialog.Tolerance))
+        {
+            MessageBox.Show(this,
+                "消せる背景が見つかりませんでした。\n\n" +
+                "四すみの色を背景とみなして消すしくみなので、四すみに絵が描かれていると何も消えません。" +
+                "「消す範囲」を大きくすると消える場合もあります。",
+                "AINE Paint", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -885,9 +1050,12 @@ public partial class MainWindow : Window
         // 太さの丸カーソルは、実際に描くツールのときだけ出す
         Canvas.BrushCursorVisible = tag is "Pen" or "Pencil" or "Eraser";
 
-        // ペン以外へ移ったらペン先の選択は閉じる
+        // そのツールを離れたら、横に出していた選択は閉じる
         if (TipPopup is not null && tag != "Pen")
             TipPopup.IsOpen = false;
+
+        if (FillPopup is not null && tag != "Fill")
+            FillPopup.IsOpen = false;
     }
 
     /// <summary>キーボードからツールを切り替える。ボタンの選択状態も合わせる。</summary>

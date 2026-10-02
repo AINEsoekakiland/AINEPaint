@@ -1077,6 +1077,45 @@ public class CanvasView : SKElement
     }
 
     /// <summary>
+    /// いまのレイヤーの背景を消す。消せたら true。
+    /// 履歴の積み方は塗りつぶしと同じで、変える前に範囲を知らせてから書き換える。
+    /// </summary>
+    public bool RemoveBackground(int tolerance)
+    {
+        if (_document is null) return false;
+        if (_document.ActiveLayer is not { } target) return false;
+
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            // 先に範囲を測ってから履歴に積みたいが、消してみないと範囲が分からない。
+            // レイヤー全体を控えておく方が安全なので、そうしている。
+            var whole = new SKRect(0, 0, _document.Width, _document.Height);
+            BeforeDocumentChange?.Invoke(whole);
+
+            var changed = BackgroundRemover.Remove(target.Bitmap, tolerance);
+
+            if (changed is null)
+            {
+                // 何も消えなかった。履歴に空の項目が残るが、戻しても見た目は変わらない
+                StrokeCompleted?.Invoke(SKRect.Empty);
+                return false;
+            }
+
+            var bounds = new SKRect(changed.Value.Left, changed.Value.Top,
+                                    changed.Value.Right, changed.Value.Bottom);
+
+            InvalidateVisual();
+            StrokeCompleted?.Invoke(bounds);
+            return true;
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
+    }
+
+    /// <summary>
     /// クリック位置から塗りつぶす。
     /// 塗る範囲を先に求めてから履歴に記録し、そのあとで適用する。
     /// </summary>
@@ -1102,7 +1141,7 @@ public class CanvasView : SKElement
             var bounds = new SKRect(mask.Bounds.Left, mask.Bounds.Top, mask.Bounds.Right, mask.Bounds.Bottom);
             BeforeDocumentChange?.Invoke(bounds);
 
-            FloodFill.Apply(target.Bitmap, mask, Brush.Color, Selection.Path);
+            FloodFill.Apply(target.Bitmap, mask, Brush.Color, Selection.Path, Brush.FillWithTransparent);
 
             InvalidateVisual();
             StrokeCompleted?.Invoke(bounds);

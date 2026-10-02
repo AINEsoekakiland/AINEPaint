@@ -9,6 +9,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BackgroundBrush}"
         UseLayoutRounding="True"
+        AllowDrop="True" DragOver="OnWindowDragOver" Drop="OnWindowDrop"
         TextElement.Foreground="{StaticResource ForegroundBrush}"
         Closing="OnWindowClosing">
 
@@ -49,6 +50,7 @@
                 <MenuItem x:Name="RedoMenuItem" Header="やり直し" InputGestureText="Ctrl+Shift+Z"
                           IsEnabled="False" Click="OnRedoClick" />
                 <Separator />
+
                 <MenuItem Header="すべて選択" InputGestureText="Ctrl+A" Click="OnSelectAllClick" />
                 <MenuItem Header="選択を解除" InputGestureText="Ctrl+D" Click="OnDeselectClick" />
             </MenuItem>
@@ -123,10 +125,12 @@
                                  Tag="Eraser" Checked="OnToolChecked"
                                  Content="{StaticResource Icon_eraser}"
                                  ToolTip="消しゴム (E)" />
-                    <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
+                    <RadioButton x:Name="FillToolButton"
+                                 GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="Fill" Checked="OnToolChecked"
+                                 PreviewMouseLeftButtonDown="OnFillButtonPressed"
                                  Content="{StaticResource Icon_fill}"
-                                 ToolTip="塗りつぶし (G)" />
+                                 ToolTip="塗りつぶし (G)　押すと種類を選べます" />
                     <RadioButton GroupName="Tools" Focusable="False" Style="{StaticResource ToolButtonStyle}"
                                  Tag="SelectRect" Checked="OnToolChecked"
                                  Content="{StaticResource Icon_selectrect}"
@@ -181,6 +185,11 @@
                     BorderThickness="1,0,0,0">
                 <DockPanel Margin="8">
                     <TextBlock DockPanel.Dock="Top" Text="レイヤー" FontSize="14" FontWeight="Bold" Margin="2,4,2,8" />
+
+                    <Button DockPanel.Dock="Bottom" Content="画像を取り込む" Height="30"
+                            Margin="0,8,0,0" Foreground="#1E1E1E" Cursor="Hand"
+                            Click="OnImportLayerClick"
+                            ToolTip="画像を新しいレイヤーとして読み込みます。ウィンドウに画像をドラッグしても取り込めます" />
 
                     <UniformGrid DockPanel.Dock="Bottom" Rows="1" Columns="5" Margin="0,8,0,0">
                         <Button Content="＋" Height="30" Margin="1,0" Foreground="#1E1E1E"
@@ -295,6 +304,53 @@
                 </StackPanel>
             </DockPanel>
         </Border>
+
+        <!-- ===== 塗りつぶしの種類（塗りつぶしボタンの右に出る） ===== -->
+        <Popup x:Name="FillPopup"
+               PlacementTarget="{Binding ElementName=FillToolButton}"
+               Placement="Right" HorizontalOffset="6" VerticalOffset="-8"
+               StaysOpen="True" AllowsTransparency="True">
+            <Border Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1"
+                    CornerRadius="6" Padding="12" Margin="0,0,10,10">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.5" Color="Black" />
+                </Border.Effect>
+
+                <StackPanel Width="236">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="✕" Width="24" Height="24"
+                                Padding="0" Foreground="#1E1E1E" Cursor="Hand"
+                                Click="OnFillCloseClick" ToolTip="閉じる" />
+                        <TextBlock Text="塗りつぶし" FontSize="14" FontWeight="Bold"
+                                   VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <StackPanel Margin="0,8,0,0">
+                        <RadioButton x:Name="FillColorMode" GroupName="FillMode"
+                                     Style="{StaticResource TipButtonStyle}"
+                                     IsChecked="True" Checked="OnFillModeChecked"
+                                     Content="色で塗る"
+                                     ToolTip="押した場所とつながっている範囲を、いまの色で塗ります" />
+                        <RadioButton x:Name="FillEraseMode" GroupName="FillMode"
+                                     Style="{StaticResource TipButtonStyle}"
+                                     Checked="OnFillModeChecked"
+                                     Content="透明にする"
+                                     ToolTip="押した場所とつながっている範囲を消して、透明にします" />
+                    </StackPanel>
+
+                    <Border Height="1" Margin="0,10"
+                            Background="{StaticResource BorderBrush2}" />
+
+                    <TextBlock Text="まとめて消す" FontSize="12" Opacity="0.7" Margin="2,0,0,6" />
+                    <Button Content="背景を自動で消す" Height="30"
+                            Foreground="#1E1E1E" Cursor="Hand" Click="OnRemoveBackgroundClick"
+                            ToolTip="四すみの色を背景とみなして、つながっている部分をまとめて透明にします" />
+                    <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.55" Margin="2,6,0,0"
+                               Text="白い紙や単色の背景向けです。景色が写った写真はうまくいきません。" />
+                </StackPanel>
+            </Border>
+        </Popup>
 
         <!-- ===== ペン先の選択（ペンボタンの右に出る） ===== -->
         <Popup x:Name="TipPopup"

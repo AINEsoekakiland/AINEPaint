@@ -110,6 +110,36 @@ public sealed class PaintDocument : IDisposable
         return layer;
     }
 
+    /// <summary>
+    /// 画像を新しいレイヤーとして足す。
+    /// キャンバスより大きい画像は収まるように縮め、中央に置く。
+    /// 小さい画像は引き伸ばさない（粗くなるだけなので）。
+    /// </summary>
+    public Layer AddImageLayer(SKBitmap source, string name)
+    {
+        var layer = new Layer(Width, Height,
+            string.IsNullOrWhiteSpace(name) ? NextLayerName() : name);
+
+        float scale = MathF.Min(1f, MathF.Min((float)Width / source.Width, (float)Height / source.Height));
+        float w = source.Width * scale;
+        float h = source.Height * scale;
+        var destination = SKRect.Create((Width - w) * 0.5f, (Height - h) * 0.5f, w, h);
+
+        using (var canvas = new SKCanvas(layer.Bitmap))
+        using (var paint = new SKPaint
+        {
+            BlendMode = SKBlendMode.Src,
+            FilterQuality = SKFilterQuality.High,
+            IsAntialias = true
+        })
+            canvas.DrawBitmap(source, destination, paint);
+
+        AddLayerInternal(layer, _activeLayerIndex + 1);
+        _activeLayerIndex = _layers.IndexOf(layer);
+        StructureChanged?.Invoke();
+        return layer;
+    }
+
     public Layer? DuplicateActiveLayer()
     {
         if (ActiveLayer is not { } source) return null;

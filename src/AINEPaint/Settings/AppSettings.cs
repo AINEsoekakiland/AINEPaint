@@ -40,6 +40,14 @@ public sealed class AppSettings
     [JsonPropertyName("fillTolerance")]
     public int FillTolerance { get; set; } = 24;
 
+    /// <summary>塗りつぶしで透明を塗るモードだったか。</summary>
+    [JsonPropertyName("fillTransparent")]
+    public bool FillTransparent { get; set; }
+
+    /// <summary>背景を消すときの許容値。前回使った値を覚えておく。</summary>
+    [JsonPropertyName("backgroundTolerance")]
+    public int BackgroundTolerance { get; set; } = 32;
+
     [JsonPropertyName("fillExpand")]
     public int FillExpand { get; set; } = 1;
 

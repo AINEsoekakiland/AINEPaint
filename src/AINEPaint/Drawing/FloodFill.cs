@@ -105,10 +105,20 @@ public static class FloodFill
     }
 
     /// <summary>求めた形を実際に塗る。</summary>
-    public static void Apply(SKBitmap target, FillMask mask, SKColor color, SKPath? clip = null)
+    /// <param name="erase">
+    /// true なら色を置くのではなく、その範囲を透明にする。
+    /// 形は同じなので、合成のしかただけを変えている。
+    /// </param>
+    public static void Apply(SKBitmap target, FillMask mask, SKColor color,
+                             SKPath? clip = null, bool erase = false)
     {
         using var canvas = new SKCanvas(target);
-        using var paint = new SKPaint { Color = color, IsAntialias = false };
+        using var paint = new SKPaint
+        {
+            Color = erase ? SKColors.Black : color,
+            IsAntialias = false,
+            BlendMode = erase ? SKBlendMode.DstOut : SKBlendMode.SrcOver
+        };
 
         canvas.Save();
         if (clip is not null)

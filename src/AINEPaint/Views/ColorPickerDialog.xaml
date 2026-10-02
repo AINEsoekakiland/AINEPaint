@@ -12,56 +12,71 @@
 
     <StackPanel Margin="16">
 
-        <Border BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1">
-            <color:SaturationValueBox x:Name="SvBox" Height="200" />
-        </Border>
+        <!-- 外の輪で色合い、中の四角で鮮やかさと明るさ -->
+        <color:ColorWheel x:Name="Wheel" Height="240" Margin="0,4,0,0" />
 
-        <Border BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1" Margin="0,12,0,0">
-            <color:HueBar x:Name="HueBar" Height="24" />
-        </Border>
-
+        <!-- 選んだ色と、開いたときの色を並べて見比べられるようにする -->
         <Grid Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <TextBlock Grid.Column="0" Text="HEX" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <TextBox Grid.Column="1" x:Name="HexBox" Height="30" Padding="6,4"
-                     Foreground="#1E1E1E" VerticalContentAlignment="Center"
-                     FontFamily="Consolas" TextChanged="OnHexChanged" />
-
-            <Border Grid.Column="2" x:Name="PreviewSwatch"
-                    Width="44" Height="30" Margin="12,0,0,0" CornerRadius="4"
-                    BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1" />
-        </Grid>
-
-        <Grid Margin="0,12,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0">
-                <TextBlock Text="R" Margin="0,0,0,4" />
-                <TextBox x:Name="RBox" Height="28" Padding="6,2" Foreground="#1E1E1E"
-                         VerticalContentAlignment="Center" TextChanged="OnRgbChanged" />
+                <TextBlock Text="いま" FontSize="11" Opacity="0.6" Margin="0,0,0,3" />
+                <Border x:Name="PreviewSwatch" Height="32" CornerRadius="4,0,0,4"
+                        BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1" />
             </StackPanel>
-            <StackPanel Grid.Column="2">
-                <TextBlock Text="G" Margin="0,0,0,4" />
-                <TextBox x:Name="GBox" Height="28" Padding="6,2" Foreground="#1E1E1E"
-                         VerticalContentAlignment="Center" TextChanged="OnRgbChanged" />
+
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="もと" FontSize="11" Opacity="0.6" Margin="0,0,0,3" />
+                <Border x:Name="OriginalSwatch" Height="32" CornerRadius="0,4,4,0"
+                        BorderBrush="{StaticResource BorderBrush2}" BorderThickness="1,1,1,1"
+                        Cursor="Hand" MouseLeftButtonDown="OnOriginalClick"
+                        ToolTip="押すと、開いたときの色に戻します" />
             </StackPanel>
-            <StackPanel Grid.Column="4">
-                <TextBlock Text="B" Margin="0,0,0,4" />
-                <TextBox x:Name="BBox" Height="28" Padding="6,2" Foreground="#1E1E1E"
-                         VerticalContentAlignment="Center" TextChanged="OnRgbChanged" />
+
+            <StackPanel Grid.Column="2" Margin="12,0,0,0">
+                <TextBlock Text="HEX" FontSize="11" Opacity="0.6" Margin="0,0,0,3" />
+                <TextBox x:Name="HexBox" Width="96" Height="32" Padding="6,4"
+                         Foreground="#1E1E1E" VerticalContentAlignment="Center"
+                         FontFamily="Consolas" TextChanged="OnHexChanged" />
             </StackPanel>
         </Grid>
+
+        <!-- 赤・緑・青。帯の色がそのまま動かした先の色になる -->
+        <Grid Margin="0,16,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="36" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="R" VerticalAlignment="Center" FontSize="12" />
+            <color:ChannelSlider Grid.Row="0" Grid.Column="1" x:Name="RedSlider" Height="26" />
+            <TextBlock Grid.Row="0" Grid.Column="2" x:Name="RedText" Text="0"
+                       VerticalAlignment="Center" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="G" VerticalAlignment="Center" FontSize="12" />
+            <color:ChannelSlider Grid.Row="1" Grid.Column="1" x:Name="GreenSlider" Height="26" Margin="0,6,0,0" />
+            <TextBlock Grid.Row="1" Grid.Column="2" x:Name="GreenText" Text="0" Margin="0,6,0,0"
+                       VerticalAlignment="Center" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="B" VerticalAlignment="Center" FontSize="12" />
+            <color:ChannelSlider Grid.Row="2" Grid.Column="1" x:Name="BlueSlider" Height="26" Margin="0,6,0,0" />
+            <TextBlock Grid.Row="2" Grid.Column="2" x:Name="BlueText" Text="0" Margin="0,6,0,0"
+                       VerticalAlignment="Center" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+        </Grid>
+
+        <!-- よく使う色。選ぶとすぐ反映される -->
+        <TextBlock Text="よく使う色" FontSize="11" Opacity="0.6" Margin="0,16,0,5" />
+        <WrapPanel x:Name="SwatchPanel" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
             <Button Content="決定" Width="96" Height="32" Foreground="#1E1E1E"
